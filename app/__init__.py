@@ -1,0 +1,1 @@
+"""Core crewsim application package."""
