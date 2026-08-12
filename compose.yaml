@@ -1,0 +1,56 @@
+x-app-environment: &app-environment
+  APP_NAME: "${APP_NAME:-core-crewsim}"
+  APP_ENV: "${APP_ENV:-development}"
+  APP_DEBUG: "${APP_DEBUG:-false}"
+  API_PREFIX: "${API_PREFIX:-/api}"
+  DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-core_crewsim}"
+
+x-app-service: &app-service
+  image: core-crewsim:local
+  build:
+    context: .
+  environment: *app-environment
+
+services:
+  db:
+    image: postgres:18-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-core_crewsim}"
+      POSTGRES_USER: "${POSTGRES_USER:-postgres}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-postgres}"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  migrate:
+    <<: *app-service
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    restart: "no"
+
+  api:
+    <<: *app-service
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    stop_grace_period: 10s
+
+volumes:
+  postgres_data:
