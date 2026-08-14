@@ -2,6 +2,21 @@
 
 FastAPI service for the crewsim admin API.
 
+## Local development with UV
+
+[UV](https://docs.astral.sh/uv/) is the primary package manager for this project. Bootstrap it
+in a Python virtual environment, then use UV for project dependency management:
+
+```bash
+python -m venv venv
+source venv/bin/activate
+python -m pip install uv
+uv sync --active --extra dev
+```
+
+On Windows, activate the environment with `venv\Scripts\activate` instead. The `--active` flag
+tells UV to install the locked dependencies into the activated `venv` environment.
+
 ## Run with Docker Compose
 
 The Compose stack runs three services:
@@ -87,21 +102,31 @@ docker run --rm \
 
 ## Dependency updates
 
-The runtime image installs exact versions from `requirements.lock`. Regenerate it whenever
-the project dependencies change:
+Use UV to add, update, and remove dependencies so that `pyproject.toml` and `uv.lock` stay in
+sync. For example:
 
 ```bash
-python -m pip install pip-tools
-pip-compile --strip-extras --output-file=requirements.lock pyproject.toml
+uv add <package>
+uv add --dev <package>
+uv remove <package>
+uv lock --upgrade
 ```
 
-Review and test dependency changes before rebuilding the image.
+The runtime image installs exact versions from `requirements.lock`. Regenerate that file with
+UV whenever runtime dependencies change:
+
+```bash
+uv export --format requirements-txt --no-dev --no-emit-project --output-file requirements.lock
+```
+
+Review and test dependency changes before rebuilding the image. Use `pip` only for the initial
+UV bootstrap; manage project packages with UV after that.
 
 ## Development checks
 
 ```bash
-pytest
-ruff check .
+uv run --active pytest
+uv run --active ruff check .
 ```
 
 ## TODOs
