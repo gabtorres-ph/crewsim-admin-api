@@ -52,5 +52,52 @@ services:
     restart: unless-stopped
     stop_grace_period: 10s
 
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: "${PGADMIN_DEFAULT_EMAIL:-admin@example.com}"
+      PGADMIN_DEFAULT_PASSWORD: "${PGADMIN_DEFAULT_PASSWORD:-admin}"
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_REPLACE_SERVERS_ON_STARTUP: "True"
+      PGPASS_FILE: /pgadmin4/pgpass
+    ports:
+      - "127.0.0.1:${PGADMIN_PORT:-5051}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    configs:
+      - source: pgadmin_servers
+        target: /pgadmin4/servers.json
+      - source: pgadmin_pgpass
+        target: /pgadmin4/pgpass
+        mode: 0600
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_data:
+  pgadmin_data:
+
+configs:
+  pgadmin_servers:
+    content: |
+      {
+        "Servers": {
+          "1": {
+            "Name": "Core CrewSim",
+            "Group": "Servers",
+            "Host": "db",
+            "Port": 5432,
+            "MaintenanceDB": "${POSTGRES_DB:-core_crewsim}",
+            "Username": "${POSTGRES_USER:-postgres}",
+            "ConnectionParameters": {
+              "sslmode": "prefer",
+              "connect_timeout": 10
+            }
+          }
+        }
+      }
+  pgadmin_pgpass:
+    content: |
+      db:5432:*:${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}
