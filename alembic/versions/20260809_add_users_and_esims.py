@@ -1,7 +1,7 @@
 """add users and esims tables
 
 Revision ID: 20260809_users_esims
-Revises: 20260808_initial_health_record
+Revises:
 Create Date: 2026-08-09 00:00:00.000000
 
 """
@@ -11,7 +11,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260809_users_esims"
-down_revision = "20260808_initial_health_record"
+down_revision = None
 branch_labels = None
 depends_on = None
 
