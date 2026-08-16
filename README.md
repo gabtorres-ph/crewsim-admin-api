@@ -42,6 +42,29 @@ curl http://localhost:8000/
 
 The interactive API documentation is at `http://localhost:8000/docs`.
 
+### Seed data for frontend testing
+
+After the database migrations have completed, create eight deterministic user/eSIM pairs:
+
+```bash
+docker compose exec api python -m app.seed
+```
+
+The command is safe to run more than once: existing seed users and eSIMs are left unchanged.
+Use `--count` to create between 5 and 10 pairs instead of the default eight:
+
+```bash
+docker compose exec api python -m app.seed --count 10
+```
+
+When running the API directly rather than through Compose, use:
+
+```bash
+uv run --active python -m app.seed
+```
+
+The script reads `DATABASE_URL` through the normal application configuration.
+
 ### Common commands
 
 ```bash
