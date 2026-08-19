@@ -122,7 +122,12 @@ docker run --rm \
   core-crewsim:local
 ```
 
-Run migrations as a separate deployment step before starting replicated API containers:
+The container runs `alembic upgrade head` before starting Uvicorn. If a migration fails, the API
+does not start and the container exits with a failure. This startup approach is intended for a
+single API replica, such as a Dockerfile-based Dokploy application.
+
+For deployments with multiple API replicas, run migrations as a separate deployment step to
+avoid concurrent migration attempts:
 
 ```bash
 docker run --rm \
