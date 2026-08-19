@@ -63,7 +63,8 @@ When running the API directly rather than through Compose, use:
 uv run --active python -m app.seed
 ```
 
-The script reads `DATABASE_URL` through the normal application configuration.
+The script reads the normal `DB_*` application configuration (or the optional
+`DATABASE_URL` override).
 
 ### Common commands
 
@@ -89,13 +90,15 @@ This permanently deletes the Compose-managed PostgreSQL volume.
 
 ## Configuration
 
-Compose reads development settings from `.env`. The application receives a container-safe
-`DATABASE_URL` using `db` as the hostname; `localhost` would incorrectly refer to the API
-container itself.
+Compose reads development settings from `.env`. It defaults `DB_HOST` to the container-safe
+hostname `db`; `localhost` would incorrectly refer to the API container itself.
 
-The credentials in `.env.example` are local development defaults. Supply production values
-through the deployment platform's environment or secret manager, and do not copy `.env` into
-the image.
+The database configuration is assembled at runtime from `DB_HOST`, `DB_PORT`, `DB_DATABASE`,
+`DB_USERNAME`, and `DB_PASSWORD`. In Dokploy, set all five on the application as runtime
+environment variables. The credentials in `.env.example` are local development defaults;
+supply production values through Dokploy's environment or secret manager, and do not copy
+`.env` into the image. `DATABASE_URL` remains available as an optional override and takes
+precedence when it is set.
 
 `APP_PORT` controls the host port. The application always listens on port `8000` inside the
 container.
@@ -111,7 +114,11 @@ docker run --rm \
   --publish 8000:8000 \
   --env APP_ENV=production \
   --env APP_DEBUG=false \
-  --env DATABASE_URL=postgresql+psycopg://user:password@database:5432/core_crewsim \
+  --env DB_HOST=database \
+  --env DB_PORT=5432 \
+  --env DB_DATABASE=core_crewsim \
+  --env DB_USERNAME=user \
+  --env DB_PASSWORD=password \
   core-crewsim:local
 ```
 
@@ -119,7 +126,11 @@ Run migrations as a separate deployment step before starting replicated API cont
 
 ```bash
 docker run --rm \
-  --env DATABASE_URL=postgresql+psycopg://user:password@database:5432/core_crewsim \
+  --env DB_HOST=database \
+  --env DB_PORT=5432 \
+  --env DB_DATABASE=core_crewsim \
+  --env DB_USERNAME=user \
+  --env DB_PASSWORD=password \
   core-crewsim:local alembic upgrade head
 ```
 

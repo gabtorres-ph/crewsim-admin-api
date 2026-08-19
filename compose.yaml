@@ -3,7 +3,11 @@ x-app-environment: &app-environment
   APP_ENV: "${APP_ENV:-development}"
   APP_DEBUG: "${APP_DEBUG:-false}"
   API_PREFIX: "${API_PREFIX:-/api}"
-  DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-core_crewsim}"
+  DB_HOST: "${DB_HOST:-db}"
+  DB_PORT: "${DB_PORT:-5432}"
+  DB_DATABASE: "${DB_DATABASE:-${POSTGRES_DB:-core_crewsim}}"
+  DB_USERNAME: "${DB_USERNAME:-${POSTGRES_USER:-postgres}}"
+  DB_PASSWORD: "${DB_PASSWORD:-${POSTGRES_PASSWORD:-postgres}}"
 
 x-app-service: &app-service
   image: core-crewsim:local
@@ -15,9 +19,9 @@ services:
   db:
     image: postgres:18-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
     environment:
-      POSTGRES_DB: "${POSTGRES_DB:-core_crewsim}"
-      POSTGRES_USER: "${POSTGRES_USER:-postgres}"
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-postgres}"
+      POSTGRES_DB: "${DB_DATABASE:-${POSTGRES_DB:-core_crewsim}}"
+      POSTGRES_USER: "${DB_USERNAME:-${POSTGRES_USER:-postgres}}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD:-${POSTGRES_PASSWORD:-postgres}}"
     volumes:
       - postgres_data:/var/lib/postgresql
     healthcheck:
@@ -89,8 +93,8 @@ configs:
             "Group": "Servers",
             "Host": "db",
             "Port": 5432,
-            "MaintenanceDB": "${POSTGRES_DB:-core_crewsim}",
-            "Username": "${POSTGRES_USER:-postgres}",
+            "MaintenanceDB": "${DB_DATABASE:-${POSTGRES_DB:-core_crewsim}}",
+            "Username": "${DB_USERNAME:-${POSTGRES_USER:-postgres}}",
             "ConnectionParameters": {
               "sslmode": "prefer",
               "connect_timeout": 10
@@ -100,4 +104,4 @@ configs:
       }
   pgadmin_pgpass:
     content: |
-      db:5432:*:${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}
+      db:5432:*:${DB_USERNAME:-${POSTGRES_USER:-postgres}}:${DB_PASSWORD:-${POSTGRES_PASSWORD:-postgres}}
