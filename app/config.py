@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     app_debug: bool = True
     api_prefix: str = "/api"
+    cors_origins: str = Field(default="", alias="CORS_ORIGINS")
     database_url: str = Field(default="", alias="DATABASE_URL")
     db_host: str = Field(default="localhost", alias="DB_HOST")
     db_port: int = Field(default=5432, alias="DB_PORT", ge=1, le=65535)
@@ -44,6 +45,11 @@ class Settings(BaseSettings):
             f"postgresql+psycopg://{username}:{password}@{host}:{self.db_port}/{database}"
         )
         return self
+
+    @property
+    def allowed_cors_origins(self) -> list[str]:
+        """Return the explicitly configured browser origins."""
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
 @lru_cache

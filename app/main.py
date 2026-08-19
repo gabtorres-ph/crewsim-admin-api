@@ -2,12 +2,15 @@ from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
 from app.config import get_settings
+from app.cors import add_cors_middleware
 from app.exceptions import InvalidOperationError, ResourceConflictError, ResourceNotFoundError
 from app.routers import api_router
 
 settings = get_settings()
 
 app = FastAPI(title=settings.app_name, debug=settings.app_debug)
+add_cors_middleware(app, settings.allowed_cors_origins)
+
 app.include_router(api_router, prefix=settings.api_prefix)
 
 

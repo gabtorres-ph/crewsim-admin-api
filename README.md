@@ -103,6 +103,32 @@ precedence when it is set.
 `APP_PORT` controls the host port. The application always listens on port `8000` inside the
 container.
 
+### Browser access and Cloudflare Access
+
+Set `CORS_ORIGINS` to a comma-separated list of exact frontend origins. For production, use:
+
+```dotenv
+CORS_ORIGINS=https://bss.crewsim.dev
+```
+
+Do not include paths or a trailing slash. The API accepts cross-origin `GET`, `POST`, `PATCH`,
+`DELETE`, and `OPTIONS` requests, and permits the `Content-Type`, `CF-Access-Client-Id`, and
+`CF-Access-Client-Secret` request headers.
+
+The Cloudflare Access application for `core.crewsim.dev` must also be configured separately:
+
+1. Add a **Service Auth** policy whose include rule matches the intended service token.
+2. Enable **Bypass OPTIONS requests to origin** so browser preflight requests reach this API.
+3. Keep the service-token values in deployment secrets; never commit them to this repository.
+
+Access policy and preflight settings are Cloudflare account configuration and are not controlled
+by this FastAPI application.
+
+> [!WARNING]
+> A browser bundle cannot keep `CF-Access-Client-Secret` confidential. If the frontend runs in
+> users' browsers, inject the service-token headers in a trusted server-side proxy or Cloudflare
+> Worker instead of exposing the token in frontend code.
+
 ## Build and run the API image directly
 
 When PostgreSQL is managed separately, build the same image and pass a database URL reachable

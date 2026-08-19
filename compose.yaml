@@ -3,6 +3,7 @@ x-app-environment: &app-environment
   APP_ENV: "${APP_ENV:-development}"
   APP_DEBUG: "${APP_DEBUG:-false}"
   API_PREFIX: "${API_PREFIX:-/api}"
+  CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:5173}"
   DB_HOST: "${DB_HOST:-db}"
   DB_PORT: "${DB_PORT:-5432}"
   DB_DATABASE: "${DB_DATABASE:-${POSTGRES_DB:-core_crewsim}}"

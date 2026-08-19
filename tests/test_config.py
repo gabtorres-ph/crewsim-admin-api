@@ -31,3 +31,19 @@ def test_database_url_override_takes_precedence(monkeypatch: pytest.MonkeyPatch)
     settings = Settings(_env_file=None)
 
     assert settings.database_url == override
+
+
+def test_cors_origins_are_trimmed_and_empty_values_are_ignored(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "CORS_ORIGINS",
+        "https://bss.crewsim.dev, http://localhost:5173,",
+    )
+
+    settings = Settings(_env_file=None)
+
+    assert settings.allowed_cors_origins == [
+        "https://bss.crewsim.dev",
+        "http://localhost:5173",
+    ]
