@@ -5,8 +5,10 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.schemas.esims import ESIMRead
+from app.schemas.favorites import FavoriteRead
 from app.schemas.users import UserCreate, UserRead, UserUpdate
 from app.services.esims import ESIMService
+from app.services.favorites import FavoriteService
 from app.services.users import UserService
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -53,3 +55,13 @@ def list_user_esims(
     limit: Annotated[int, Query(ge=1, le=100)] = 100,
 ) -> list[ESIMRead]:
     return ESIMService(db).list_esims(user_id=user_id, offset=offset, limit=limit)
+
+
+@router.get("/{user_id}/favorites", response_model=list[FavoriteRead])
+def list_user_favorites(
+    user_id: Annotated[int, Path(gt=0)],
+    db: DatabaseSession,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+) -> list[FavoriteRead]:
+    return FavoriteService(db).list_favorites(user_id=user_id, offset=offset, limit=limit)
