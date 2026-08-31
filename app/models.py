@@ -21,7 +21,6 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     email: Mapped[str] = mapped_column(String(255), nullable=False)
-    sex: Mapped[str] = mapped_column(String(255), nullable=True)
     language: Mapped[str] = mapped_column(String(255), nullable=False)
     currency: Mapped[str] = mapped_column(String(255), nullable=False)
     timezone: Mapped[str] = mapped_column(String(255), nullable=False)
