@@ -29,7 +29,7 @@ class User(Base):
     lastname: Mapped[str | None] = mapped_column(String(255), nullable=True)
     airline: Mapped[str | None] = mapped_column(String(255), nullable=True)
     position: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    referralcode: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    referralcode: Mapped[str | None] = mapped_column(String(8), nullable=True)
     referredby: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     stripeid: Mapped[str | None] = mapped_column(String(255), nullable=True)
     logtoid: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -38,6 +38,7 @@ class User(Base):
     smsnotification: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     rateus: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     esims: Mapped[list["ESIM"]] = relationship(back_populates="user")
+    favorites: Mapped[list["Favorite"]] = relationship(back_populates="user")
 
 
 class ESIM(Base):
@@ -50,7 +51,7 @@ class ESIM(Base):
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     isesim: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     createdate: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    token: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    token: Mapped[str | None] = mapped_column(String(8), nullable=True)
     networkstatus: Mapped[str | None] = mapped_column(String(255), nullable=True)
     balance: Mapped[float | None] = mapped_column(Float, nullable=True)
     use_account_for_charging: Mapped[bool] = mapped_column(
@@ -63,3 +64,12 @@ class ESIM(Base):
     allow_data: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     user: Mapped[User | None] = relationship(back_populates="esims")
     account: Mapped[Account] = relationship(back_populates="esims")
+
+
+class Favorite(Base):
+    __tablename__ = "favorites"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    userid: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    country: Mapped[str] = mapped_column(String(255), nullable=False)
+    user: Mapped[User] = relationship(back_populates="favorites")
