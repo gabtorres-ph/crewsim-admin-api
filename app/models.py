@@ -6,6 +6,14 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db import Base
 
 
+class Account(Base):
+    __tablename__ = "accounts"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    balance: Mapped[float] = mapped_column(Float, nullable=False)
+
+
 class User(Base):
     __tablename__ = "users"
     __table_args__ = (UniqueConstraint("email", name="uq_users_email"),)
