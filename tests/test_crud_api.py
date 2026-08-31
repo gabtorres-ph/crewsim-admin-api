@@ -1,5 +1,7 @@
 import pytest
 
+from app.models import Account
+
 
 def user_payload(email="person@example.com"):
     return {
@@ -8,6 +10,13 @@ def user_payload(email="person@example.com"):
         "currency": "USD",
         "timezone": "UTC",
     }
+
+
+def create_account(db_session):
+    account = Account(name="Test account", balance=0)
+    db_session.add(account)
+    db_session.flush()
+    return account
 
 
 @pytest.mark.asyncio
@@ -29,10 +38,12 @@ async def test_user_crud(client):
 
 
 @pytest.mark.asyncio
-async def test_esim_crud_and_user_filter(client):
+async def test_esim_crud_and_user_filter(client, db_session):
     user_id = (await client.post("/api/users", json=user_payload())).json()["id"]
+    account = create_account(db_session)
     create_response = await client.post(
-        "/api/esims", json={"user_id": user_id, "imsi": "001010000000001"}
+        "/api/esims",
+        json={"user_id": user_id, "account_id": account.id, "imsi": "001010000000001"},
     )
     assert create_response.status_code == 201
     esim = create_response.json()
@@ -53,8 +64,11 @@ async def test_esim_crud_and_user_filter(client):
 
 
 @pytest.mark.asyncio
-async def test_esim_requires_existing_user(client):
-    response = await client.post("/api/esims", json={"user_id": 999, "imsi": "00101"})
+async def test_esim_requires_existing_user(client, db_session):
+    account = create_account(db_session)
+    response = await client.post(
+        "/api/esims", json={"user_id": 999, "account_id": account.id, "imsi": "00101"}
+    )
 
     assert response.status_code == 404
     assert response.json() == {"detail": "User '999' was not found"}
@@ -70,9 +84,12 @@ async def test_duplicate_user_email_returns_conflict(client):
 
 
 @pytest.mark.asyncio
-async def test_user_with_esim_cannot_be_deleted(client):
+async def test_user_with_esim_cannot_be_deleted(client, db_session):
     user_id = (await client.post("/api/users", json=user_payload())).json()["id"]
-    await client.post("/api/esims", json={"user_id": user_id, "imsi": "00101"})
+    account = create_account(db_session)
+    await client.post(
+        "/api/esims", json={"user_id": user_id, "account_id": account.id, "imsi": "00101"}
+    )
 
     response = await client.delete(f"/api/users/{user_id}")
 

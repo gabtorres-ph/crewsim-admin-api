@@ -13,6 +13,8 @@ class UserService(TransactionalService):
         self.users = UserRepository(session)
 
     def create_user(self, data: UserCreate) -> User:
+        if data.referredby is not None:
+            self._require_user(data.referredby)
         return self._write(
             lambda: self.users.create(data.model_dump()),
             conflict_message="The user conflicts with existing database data",
@@ -30,6 +32,8 @@ class UserService(TransactionalService):
     def update_user(self, user_id: int, data: UserUpdate) -> User:
         user = self.get_user(user_id)
         values = data.model_dump(exclude_unset=True)
+        if "referredby" in values:
+            self._require_user(values["referredby"])
         return self._write(
             lambda: self.users.update(user, values),
             conflict_message="The user update conflicts with existing database data",
@@ -41,3 +45,7 @@ class UserService(TransactionalService):
             lambda: self.users.delete(user),
             conflict_message="The user cannot be deleted while it is referenced by other data",
         )
+
+    def _require_user(self, user_id: int) -> None:
+        if self.users.get(user_id) is None:
+            raise ResourceNotFoundError("User", user_id)

@@ -1,7 +1,10 @@
+from typing import Any
+
 from sqlalchemy.orm import Session
 
 from app.exceptions import ResourceNotFoundError
 from app.models import ESIM
+from app.repositories.accounts import AccountRepository
 from app.repositories.esims import ESIMRepository
 from app.repositories.users import UserRepository
 from app.schemas.esims import ESIMCreate, ESIMUpdate
@@ -13,10 +16,12 @@ class ESIMService(TransactionalService):
         super().__init__(session)
         self.esims = ESIMRepository(session)
         self.users = UserRepository(session)
+        self.accounts = AccountRepository(session)
 
     def create_esim(self, data: ESIMCreate) -> ESIM:
-        self._require_user(data.user_id)
-        values = {"userid": data.user_id, "imsi": data.imsi}
+        values = data.model_dump()
+        self._validate_references(values)
+        values = self._database_values(values)
         return self._write(
             lambda: self.esims.create(values),
             conflict_message="The eSIM conflicts with existing database data",
@@ -39,9 +44,8 @@ class ESIMService(TransactionalService):
     def update_esim(self, esim_id: int, data: ESIMUpdate) -> ESIM:
         esim = self.get_esim(esim_id)
         values = data.model_dump(exclude_unset=True)
-        if "user_id" in values:
-            self._require_user(values["user_id"])
-            values["userid"] = values.pop("user_id")
+        self._validate_references(values)
+        values = self._database_values(values)
         return self._write(
             lambda: self.esims.update(esim, values),
             conflict_message="The eSIM update conflicts with existing database data",
@@ -57,3 +61,21 @@ class ESIMService(TransactionalService):
     def _require_user(self, user_id: int) -> None:
         if self.users.get(user_id) is None:
             raise ResourceNotFoundError("User", user_id)
+
+    def _require_account(self, account_id: int) -> None:
+        if self.accounts.get(account_id) is None:
+            raise ResourceNotFoundError("Account", account_id)
+
+    def _validate_references(self, values: dict[str, Any]) -> None:
+        if values.get("user_id") is not None:
+            self._require_user(values["user_id"])
+        if "account_id" in values:
+            self._require_account(values["account_id"])
+
+    @staticmethod
+    def _database_values(values: dict[str, Any]) -> dict[str, Any]:
+        if "user_id" in values:
+            values["userid"] = values.pop("user_id")
+        if "account_id" in values:
+            values["accountid"] = values.pop("account_id")
+        return values

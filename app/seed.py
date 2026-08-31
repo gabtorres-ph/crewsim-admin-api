@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.models import ESIM, User
+from app.models import ESIM, Account, User
 
 
 @dataclass(frozen=True)
@@ -111,6 +111,12 @@ def seed_database(session: Session, records: Sequence[SeedRecord]) -> SeedResult
     created_esims = 0
 
     with session.begin():
+        account = session.scalar(select(Account).where(Account.name == "Seed account"))
+        if account is None:
+            account = Account(name="Seed account", balance=0)
+            session.add(account)
+            session.flush()
+
         users_by_email = {
             user.email: user
             for user in session.scalars(select(User).where(User.email.in_(emails)))
@@ -136,7 +142,7 @@ def seed_database(session: Session, records: Sequence[SeedRecord]) -> SeedResult
 
             esim = esims_by_imsi.get(record.imsi)
             if esim is None:
-                esim = ESIM(userid=user.id, imsi=record.imsi)
+                esim = ESIM(userid=user.id, accountid=account.id, imsi=record.imsi)
                 session.add(esim)
                 esims_by_imsi[record.imsi] = esim
                 created_esims += 1

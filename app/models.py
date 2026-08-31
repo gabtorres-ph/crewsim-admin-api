@@ -12,7 +12,7 @@ class Account(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     balance: Mapped[float] = mapped_column(Float, nullable=False)
-    esims: Mapped[list["ESIM"]] = relationship(back_populates="account")
+    esims: Mapped[list["ESIM"]] = relationship(back_populates="account", passive_deletes=True)
 
 
 class User(Base):
@@ -36,8 +36,8 @@ class User(Base):
     newsletter: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     smsnotification: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     rateus: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    esims: Mapped[list["ESIM"]] = relationship(back_populates="user")
-    favorites: Mapped[list["Favorite"]] = relationship(back_populates="user")
+    esims: Mapped[list["ESIM"]] = relationship(back_populates="user", passive_deletes=True)
+    favorites: Mapped[list["Favorite"]] = relationship(back_populates="user", passive_deletes=True)
 
 
 class ESIM(Base):
