@@ -1,4 +1,6 @@
-from sqlalchemy import ForeignKey, String, UniqueConstraint
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -10,9 +12,22 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     email: Mapped[str] = mapped_column(String(255), nullable=False)
+    sex: Mapped[str] = mapped_column(String(255), nullable=True)
     language: Mapped[str] = mapped_column(String(255), nullable=False)
     currency: Mapped[str] = mapped_column(String(255), nullable=False)
     timezone: Mapped[str] = mapped_column(String(255), nullable=False)
+    firstname: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    lastname: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    airline: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    position: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    referralcode: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    referredby: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    stripeid: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    logtoid: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    createdate: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    newsletter: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    smsnotification: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    rateus: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class ESIM(Base):
@@ -21,3 +36,15 @@ class ESIM(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     userid: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     imsi: Mapped[str] = mapped_column(String(255), nullable=False)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    isesim: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    createdate: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    token: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    networkstatus: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    balance: Mapped[float | None] = mapped_column(Float, nullable=True)
+    use_account_for_charging: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    smdpserver: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    activationcode: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    imei: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    imei_device: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    allow_data: Mapped[bool | None] = mapped_column(Boolean, nullable=True)

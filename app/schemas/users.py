@@ -8,6 +8,7 @@ NonEmptyString = Annotated[str, Field(min_length=1, max_length=255)]
 class UserBase(BaseModel):
     email: NonEmptyString
     language: NonEmptyString
+    sex: NonEmptyString
     currency: NonEmptyString
     timezone: NonEmptyString
 
@@ -21,6 +22,7 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     email: NonEmptyString | None = None
     language: NonEmptyString | None = None
+    sex: NonEmptyString | None = None
     currency: NonEmptyString | None = None
     timezone: NonEmptyString | None = None
 
