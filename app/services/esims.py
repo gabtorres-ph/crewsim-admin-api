@@ -34,12 +34,22 @@ class ESIMService(TransactionalService):
         return esim
 
     def list_esims(
-        self, *, user_id: int | None = None, offset: int = 0, limit: int = 100
+        self,
+        *,
+        user_id: int | None = None,
+        account_id: int | None = None,
+        offset: int = 0,
+        limit: int = 100,
     ) -> list[ESIM]:
-        if user_id is None:
-            return self.esims.list(offset=offset, limit=limit)
-        self._require_user(user_id)
-        return self.esims.list_for_user(user_id, offset=offset, limit=limit)
+        if user_id is not None:
+            self._require_user(user_id)
+        if account_id is not None:
+            self._require_account(account_id)
+        if user_id is not None:
+            return self.esims.list_for_user(user_id, offset=offset, limit=limit)
+        if account_id is not None:
+            return self.esims.list_for_account(account_id, offset=offset, limit=limit)
+        return self.esims.list(offset=offset, limit=limit)
 
     def update_esim(self, esim_id: int, data: ESIMUpdate) -> ESIM:
         esim = self.get_esim(esim_id)

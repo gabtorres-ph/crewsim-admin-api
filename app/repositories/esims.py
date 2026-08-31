@@ -23,3 +23,15 @@ class ESIMRepository(CRUDRepository[ESIM]):
             .limit(limit)
         )
         return list(self.session.scalars(statement))
+
+    def list_for_account(
+        self, account_id: int, *, offset: int = 0, limit: int = 100
+    ) -> list[ESIM]:
+        statement = (
+            select(ESIM)
+            .where(ESIM.accountid == account_id)
+            .order_by(ESIM.id)
+            .offset(offset)
+            .limit(limit)
+        )
+        return list(self.session.scalars(statement))
