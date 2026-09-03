@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db import SessionLocal
+from app.database import SessionLocal
 from app.models import ESIM, Account, User
 
 
@@ -118,12 +118,10 @@ def seed_database(session: Session, records: Sequence[SeedRecord]) -> SeedResult
             session.flush()
 
         users_by_email = {
-            user.email: user
-            for user in session.scalars(select(User).where(User.email.in_(emails)))
+            user.email: user for user in session.scalars(select(User).where(User.email.in_(emails)))
         }
         esims_by_imsi = {
-            esim.imsi: esim
-            for esim in session.scalars(select(ESIM).where(ESIM.imsi.in_(imsis)))
+            esim.imsi: esim for esim in session.scalars(select(ESIM).where(ESIM.imsi.in_(imsis)))
         }
 
         for record in records:

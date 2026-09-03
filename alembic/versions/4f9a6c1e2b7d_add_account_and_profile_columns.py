@@ -5,6 +5,7 @@ Revises: ce3d0bca6997
 Create Date: 2026-08-31 17:00:00.000000
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -50,7 +51,9 @@ def upgrade() -> None:
     op.add_column("esims", sa.Column("balance", sa.Float(), nullable=True))
     op.add_column(
         "esims",
-        sa.Column("use_account_for_charging", sa.Boolean(), nullable=False, server_default=sa.false()),
+        sa.Column(
+            "use_account_for_charging", sa.Boolean(), nullable=False, server_default=sa.false()
+        ),
     )
     op.add_column("esims", sa.Column("smdpserver", sa.String(length=255), nullable=True))
     op.add_column("esims", sa.Column("activationcode", sa.String(length=255), nullable=True))
@@ -68,8 +71,7 @@ def upgrade() -> None:
     )
     op.execute(
         sa.text(
-            "UPDATE esims SET accountid = (SELECT MIN(id) FROM accounts) "
-            "WHERE accountid IS NULL"
+            "UPDATE esims SET accountid = (SELECT MIN(id) FROM accounts) WHERE accountid IS NULL"
         )
     )
     op.alter_column("esims", "accountid", existing_type=sa.Integer(), nullable=False)
@@ -95,16 +97,36 @@ def downgrade() -> None:
     op.drop_constraint("fk_esims_accountid_accounts", "esims", type_="foreignkey")
     op.alter_column("esims", "userid", existing_type=sa.Integer(), nullable=False)
     for column in (
-        "allow_data", "imei_device", "imei", "activationcode", "smdpserver",
-        "use_account_for_charging", "balance", "networkstatus", "token", "createdate",
-        "isesim", "name", "accountid",
+        "allow_data",
+        "imei_device",
+        "imei",
+        "activationcode",
+        "smdpserver",
+        "use_account_for_charging",
+        "balance",
+        "networkstatus",
+        "token",
+        "createdate",
+        "isesim",
+        "name",
+        "accountid",
     ):
         op.drop_column("esims", column)
 
     op.drop_constraint("fk_users_referredby_users", "users", type_="foreignkey")
     for column in (
-        "rateus", "smsnotification", "newsletter", "createdate", "logtoid", "stripeid",
-        "referredby", "referralcode", "position", "airline", "lastname", "firstname",
+        "rateus",
+        "smsnotification",
+        "newsletter",
+        "createdate",
+        "logtoid",
+        "stripeid",
+        "referredby",
+        "referralcode",
+        "position",
+        "airline",
+        "lastname",
+        "firstname",
     ):
         op.drop_column("users", column)
 

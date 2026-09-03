@@ -1,9 +1,13 @@
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
+from app.common.cors import add_cors_middleware
+from app.common.exceptions import (
+    InvalidOperationError,
+    ResourceConflictError,
+    ResourceNotFoundError,
+)
 from app.config import get_settings
-from app.cors import add_cors_middleware
-from app.exceptions import InvalidOperationError, ResourceConflictError, ResourceNotFoundError
 from app.routers import api_router
 
 settings = get_settings()
@@ -22,16 +26,12 @@ async def resource_not_found_handler(
 
 
 @app.exception_handler(ResourceConflictError)
-async def resource_conflict_handler(
-    request: Request, error: ResourceConflictError
-) -> JSONResponse:
+async def resource_conflict_handler(request: Request, error: ResourceConflictError) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_409_CONFLICT, content={"detail": str(error)})
 
 
 @app.exception_handler(InvalidOperationError)
-async def invalid_operation_handler(
-    request: Request, error: InvalidOperationError
-) -> JSONResponse:
+async def invalid_operation_handler(request: Request, error: InvalidOperationError) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={"detail": str(error)},

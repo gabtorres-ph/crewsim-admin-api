@@ -2,16 +2,16 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.exceptions import ResourceNotFoundError
+from app.common.exceptions import ResourceNotFoundError
+from app.common.manager import TransactionalManager
 from app.models import ESIM
 from app.repositories.accounts import AccountRepository
 from app.repositories.esims import ESIMRepository
 from app.repositories.users import UserRepository
 from app.schemas.esims import ESIMCreate, ESIMUpdate
-from app.services.base import TransactionalService
 
 
-class ESIMService(TransactionalService):
+class ESIMService(TransactionalManager):
     def __init__(self, session: Session) -> None:
         super().__init__(session)
         self.esims = ESIMRepository(session)

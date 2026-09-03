@@ -49,16 +49,12 @@ async def test_account_crud_and_esim_listing(client):
     assert (await client.get(f"/api/accounts/{account_id}")).json() == account
     assert (await client.get("/api/accounts")).json() == [account]
 
-    update_response = await client.patch(
-        f"/api/accounts/{account_id}", json={"balance": 20}
-    )
+    update_response = await client.patch(f"/api/accounts/{account_id}", json={"balance": 20})
     assert update_response.status_code == 200
     assert update_response.json()["balance"] == 20
 
     esim = (
-        await client.post(
-            "/api/esims", json={"account_id": account_id, "imsi": "001010000000001"}
-        )
+        await client.post("/api/esims", json={"account_id": account_id, "imsi": "001010000000001"})
     ).json()
     assert (await client.get(f"/api/accounts/{account_id}/esims")).json() == [esim]
 
@@ -84,9 +80,7 @@ async def test_esim_crud_and_user_filter(client, db_session):
     assert (await client.get(f"/api/users/{user_id}/esims")).json() == [esim]
     assert (await client.get(f"/api/esims?user_id={user_id}")).json() == [esim]
 
-    update_response = await client.patch(
-        f"/api/esims/{esim['id']}", json={"imsi": "00202"}
-    )
+    update_response = await client.patch(f"/api/esims/{esim['id']}", json={"imsi": "00202"})
     assert update_response.status_code == 200
     assert update_response.json()["imsi"] == "00202"
 
@@ -137,9 +131,7 @@ async def test_favorite_duplicate_and_missing_resource_handling(client):
         await client.post("/api/users", json=user_payload("second@example.com"))
     ).json()["id"]
     assert (
-        await client.post(
-            "/api/favorites", json={"user_id": second_user_id, "country": "Japan"}
-        )
+        await client.post("/api/favorites", json={"user_id": second_user_id, "country": "Japan"})
     ).status_code == 201
 
     missing_user_response = await client.post(

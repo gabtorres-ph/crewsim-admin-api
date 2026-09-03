@@ -1,13 +1,13 @@
 from sqlalchemy.orm import Session
 
-from app.exceptions import ResourceNotFoundError
+from app.common.exceptions import ResourceNotFoundError
+from app.common.manager import TransactionalManager
 from app.models import Account
 from app.repositories.accounts import AccountRepository
 from app.schemas.accounts import AccountCreate, AccountUpdate
-from app.services.base import TransactionalService
 
 
-class AccountService(TransactionalService):
+class AccountService(TransactionalManager):
     def __init__(self, session: Session) -> None:
         super().__init__(session)
         self.accounts = AccountRepository(session)

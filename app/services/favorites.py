@@ -1,14 +1,14 @@
 from sqlalchemy.orm import Session
 
-from app.exceptions import ResourceNotFoundError
+from app.common.exceptions import ResourceNotFoundError
+from app.common.manager import TransactionalManager
 from app.models import Favorite
 from app.repositories.favorites import FavoriteRepository
 from app.repositories.users import UserRepository
 from app.schemas.favorites import FavoriteCreate
-from app.services.base import TransactionalService
 
 
-class FavoriteService(TransactionalService):
+class FavoriteService(TransactionalManager):
     def __init__(self, session: Session) -> None:
         super().__init__(session)
         self.favorites = FavoriteRepository(session)

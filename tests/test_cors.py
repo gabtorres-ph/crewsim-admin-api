@@ -2,8 +2,7 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from app.cors import ALLOWED_CORS_HEADERS, ALLOWED_CORS_METHODS, add_cors_middleware
-
+from app.common.cors import ALLOWED_CORS_HEADERS, ALLOWED_CORS_METHODS, add_cors_middleware
 
 ALLOWED_ORIGIN = "https://bss.crewsim.dev"
 

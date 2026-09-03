@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Path, Query, Response, status
 from sqlalchemy.orm import Session
 
-from app.db import get_db
+from app.database import get_db
 from app.schemas.esims import ESIMCreate, ESIMRead, ESIMUpdate
 from app.services.esims import ESIMService
 

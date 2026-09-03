@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Path, Query, Response, status
 from sqlalchemy.orm import Session
 
-from app.db import get_db
+from app.database import get_db
 from app.schemas.accounts import AccountCreate, AccountRead, AccountUpdate
 from app.schemas.esims import ESIMRead
 from app.services.accounts import AccountService
@@ -28,9 +28,7 @@ def list_accounts(
 
 
 @router.get("/{account_id}", response_model=AccountRead)
-def get_account(
-    account_id: Annotated[int, Path(gt=0)], db: DatabaseSession
-) -> AccountRead:
+def get_account(account_id: Annotated[int, Path(gt=0)], db: DatabaseSession) -> AccountRead:
     return AccountService(db).get_account(account_id)
 
 
@@ -42,9 +40,7 @@ def update_account(
 
 
 @router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_account(
-    account_id: Annotated[int, Path(gt=0)], db: DatabaseSession
-) -> Response:
+def delete_account(account_id: Annotated[int, Path(gt=0)], db: DatabaseSession) -> Response:
     AccountService(db).delete_account(account_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

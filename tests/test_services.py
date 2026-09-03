@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy.orm import Session
 
-from app.exceptions import ResourceConflictError, ResourceNotFoundError
+from app.common.exceptions import ResourceConflictError, ResourceNotFoundError
 from app.models import Account
 from app.schemas.esims import ESIMCreate, ESIMUpdate
 from app.schemas.users import UserCreate
@@ -32,9 +32,7 @@ def test_esim_service_validates_user_and_can_reassign(db_session: Session):
     first_user = users.create_user(make_user_data())
     second_user = users.create_user(make_user_data("second@example.com"))
 
-    esim = esims.create_esim(
-        ESIMCreate(user_id=first_user.id, account_id=account.id, imsi="12345")
-    )
+    esim = esims.create_esim(ESIMCreate(user_id=first_user.id, account_id=account.id, imsi="12345"))
     updated = esims.update_esim(esim.id, ESIMUpdate(user_id=second_user.id))
 
     assert updated.userid == second_user.id

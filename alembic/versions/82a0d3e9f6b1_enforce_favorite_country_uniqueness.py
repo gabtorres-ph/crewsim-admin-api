@@ -5,6 +5,7 @@ Revises: 4f9a6c1e2b7d
 Create Date: 2026-08-31 18:00:00.000000
 
 """
+
 from collections.abc import Sequence
 
 from alembic import op
@@ -16,9 +17,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.create_unique_constraint(
-        "uq_favorites_userid_country", "favorites", ["userid", "country"]
-    )
+    op.create_unique_constraint("uq_favorites_userid_country", "favorites", ["userid", "country"])
 
 
 def downgrade() -> None:

@@ -53,9 +53,22 @@ class UserUpdate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     @field_validator(
-        "email", "language", "currency", "timezone", "firstname", "lastname", "airline",
-        "position", "referralcode", "referredby", "stripeid", "logtoid", "createdate",
-        "newsletter", "smsnotification", "rateus",
+        "email",
+        "language",
+        "currency",
+        "timezone",
+        "firstname",
+        "lastname",
+        "airline",
+        "position",
+        "referralcode",
+        "referredby",
+        "stripeid",
+        "logtoid",
+        "createdate",
+        "newsletter",
+        "smsnotification",
+        "rateus",
     )
     @classmethod
     def reject_null(cls, value: str | None) -> str:

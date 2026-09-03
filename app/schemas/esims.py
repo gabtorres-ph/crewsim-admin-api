@@ -47,9 +47,21 @@ class ESIMUpdate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     @field_validator(
-        "user_id", "account_id", "imsi", "name", "isesim", "createdate", "token",
-        "networkstatus", "balance", "use_account_for_charging", "smdpserver",
-        "activationcode", "imei", "imei_device", "allow_data",
+        "user_id",
+        "account_id",
+        "imsi",
+        "name",
+        "isesim",
+        "createdate",
+        "token",
+        "networkstatus",
+        "balance",
+        "use_account_for_charging",
+        "smdpserver",
+        "activationcode",
+        "imei",
+        "imei_device",
+        "allow_data",
     )
     @classmethod
     def reject_null(cls, value: int | str | None) -> int | str:

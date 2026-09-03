@@ -4,12 +4,12 @@ from typing import Any, Generic, TypeVar
 from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
-from app.db import Base
+from app.database import Base
 
 ModelT = TypeVar("ModelT", bound=Base)
 
 
-class CRUDRepository(Generic[ModelT]):
+class CRUDResourceAccess(Generic[ModelT]):
     """Reusable persistence operations for a single SQLAlchemy model."""
 
     def __init__(self, session: Session, model: type[ModelT]) -> None:

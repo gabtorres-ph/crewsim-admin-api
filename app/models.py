@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db import Base
+from app.database import Base
 
 
 class Account(Base):
@@ -53,9 +53,7 @@ class ESIM(Base):
     token: Mapped[str | None] = mapped_column(String(8), nullable=True)
     networkstatus: Mapped[str | None] = mapped_column(String(255), nullable=True)
     balance: Mapped[float | None] = mapped_column(Float, nullable=True)
-    use_account_for_charging: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False
-    )
+    use_account_for_charging: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     smdpserver: Mapped[str | None] = mapped_column(String(255), nullable=True)
     activationcode: Mapped[str | None] = mapped_column(String(255), nullable=True)
     imei: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -67,9 +65,7 @@ class ESIM(Base):
 
 class Favorite(Base):
     __tablename__ = "favorites"
-    __table_args__ = (
-        UniqueConstraint("userid", "country", name="uq_favorites_userid_country"),
-    )
+    __table_args__ = (UniqueConstraint("userid", "country", name="uq_favorites_userid_country"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     userid: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
