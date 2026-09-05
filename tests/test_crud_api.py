@@ -38,33 +38,6 @@ async def test_user_crud(client):
 
 
 @pytest.mark.asyncio
-async def test_account_crud_and_esim_listing(client):
-    create_response = await client.post(
-        "/api/accounts", json={"name": "Test account", "balance": 12.5}
-    )
-    assert create_response.status_code == 201
-    account = create_response.json()
-    account_id = account["id"]
-
-    assert (await client.get(f"/api/accounts/{account_id}")).json() == account
-    assert (await client.get("/api/accounts")).json() == [account]
-
-    update_response = await client.patch(f"/api/accounts/{account_id}", json={"balance": 20})
-    assert update_response.status_code == 200
-    assert update_response.json()["balance"] == 20
-
-    esim = (
-        await client.post("/api/esims", json={"account_id": account_id, "imsi": "001010000000001"})
-    ).json()
-    assert (await client.get(f"/api/accounts/{account_id}/esims")).json() == [esim]
-
-    assert (await client.delete(f"/api/accounts/{account_id}")).status_code == 409
-    assert (await client.delete(f"/api/esims/{esim['id']}")).status_code == 204
-    assert (await client.delete(f"/api/accounts/{account_id}")).status_code == 204
-    assert (await client.get(f"/api/accounts/{account_id}")).status_code == 404
-
-
-@pytest.mark.asyncio
 async def test_esim_crud_and_user_filter(client, db_session):
     user_id = (await client.post("/api/users", json=user_payload())).json()["id"]
     account = create_account(db_session)

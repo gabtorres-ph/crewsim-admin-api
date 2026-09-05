@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 
-from app.common.resource_access import CRUDResourceAccess
 from app.accounts.models import Account
+from app.common.resource_access import CRUDResourceAccess
 
 
 class AccountResourceAccess(CRUDResourceAccess[Account]):

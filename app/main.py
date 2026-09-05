@@ -8,7 +8,7 @@ from app.common.exceptions import (
     ResourceNotFoundError,
 )
 from app.config import get_settings
-from app.routers import api_router
+from app.routes import api_router
 
 settings = get_settings()
 

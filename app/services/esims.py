@@ -2,10 +2,10 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.accounts.resource_access import AccountResourceAccess
 from app.common.exceptions import ResourceNotFoundError
 from app.common.manager import TransactionalManager
 from app.models import ESIM
-from app.repositories.accounts import AccountResourceAccess
 from app.repositories.esims import ESIMRepository
 from app.repositories.users import UserRepository
 from app.schemas.esims import ESIMCreate, ESIMUpdate
