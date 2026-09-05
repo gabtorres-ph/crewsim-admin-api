@@ -2,15 +2,15 @@ from sqlalchemy.orm import Session
 
 from app.common.exceptions import ResourceNotFoundError
 from app.common.manager import TransactionalManager
-from app.models import User
-from app.repositories.users import UserRepository
-from app.schemas.users import UserCreate, UserUpdate
+from app.users.models import User
+from app.users.resource_access import UserResourceAccess
+from app.users.schemas import UserCreate, UserUpdate
 
 
-class UserService(TransactionalManager):
+class UserManager(TransactionalManager):
     def __init__(self, session: Session) -> None:
         super().__init__(session)
-        self.users = UserRepository(session)
+        self.users = UserResourceAccess(session)
 
     def create_user(self, data: UserCreate) -> User:
         if data.referredby is not None:

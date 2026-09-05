@@ -7,15 +7,15 @@ from app.common.exceptions import ResourceNotFoundError
 from app.common.manager import TransactionalManager
 from app.models import ESIM
 from app.repositories.esims import ESIMRepository
-from app.repositories.users import UserRepository
 from app.schemas.esims import ESIMCreate, ESIMUpdate
+from app.users.resource_access import UserResourceAccess
 
 
 class ESIMService(TransactionalManager):
     def __init__(self, session: Session) -> None:
         super().__init__(session)
         self.esims = ESIMRepository(session)
-        self.users = UserRepository(session)
+        self.users = UserResourceAccess(session)
         self.accounts = AccountResourceAccess(session)
 
     def create_esim(self, data: ESIMCreate) -> ESIM:

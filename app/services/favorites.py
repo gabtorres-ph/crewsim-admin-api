@@ -4,15 +4,15 @@ from app.common.exceptions import ResourceNotFoundError
 from app.common.manager import TransactionalManager
 from app.models import Favorite
 from app.repositories.favorites import FavoriteRepository
-from app.repositories.users import UserRepository
 from app.schemas.favorites import FavoriteCreate
+from app.users.resource_access import UserResourceAccess
 
 
 class FavoriteService(TransactionalManager):
     def __init__(self, session: Session) -> None:
         super().__init__(session)
         self.favorites = FavoriteRepository(session)
-        self.users = UserRepository(session)
+        self.users = UserResourceAccess(session)
 
     def create_favorite(self, data: FavoriteCreate) -> Favorite:
         self._require_user(data.user_id)

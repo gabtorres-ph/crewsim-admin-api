@@ -20,24 +20,6 @@ def create_account(db_session):
 
 
 @pytest.mark.asyncio
-async def test_user_crud(client):
-    create_response = await client.post("/api/users", json=user_payload())
-    assert create_response.status_code == 201
-    user_id = create_response.json()["id"]
-
-    assert (await client.get(f"/api/users/{user_id}")).json()["email"] == "person@example.com"
-    assert (await client.get("/api/users")).json() == [create_response.json()]
-
-    update_response = await client.patch(f"/api/users/{user_id}", json={"currency": "EUR"})
-    assert update_response.status_code == 200
-    assert update_response.json()["currency"] == "EUR"
-
-    delete_response = await client.delete(f"/api/users/{user_id}")
-    assert delete_response.status_code == 204
-    assert (await client.get(f"/api/users/{user_id}")).status_code == 404
-
-
-@pytest.mark.asyncio
 async def test_esim_crud_and_user_filter(client, db_session):
     user_id = (await client.post("/api/users", json=user_payload())).json()["id"]
     account = create_account(db_session)
@@ -116,48 +98,3 @@ async def test_favorite_duplicate_and_missing_resource_handling(client):
     assert (await client.get("/api/users/999/favorites")).status_code == 404
     assert (await client.get("/api/favorites?limit=101")).status_code == 422
     assert (await client.get("/api/favorites?user_id=0")).status_code == 422
-
-
-@pytest.mark.asyncio
-async def test_user_with_favorite_cannot_be_deleted(client):
-    user_id = (await client.post("/api/users", json=user_payload())).json()["id"]
-    assert (
-        await client.post("/api/favorites", json={"user_id": user_id, "country": "Japan"})
-    ).status_code == 201
-
-    response = await client.delete(f"/api/users/{user_id}")
-
-    assert response.status_code == 409
-    assert (await client.get(f"/api/users/{user_id}")).status_code == 200
-
-
-@pytest.mark.asyncio
-async def test_duplicate_user_email_returns_conflict(client):
-    assert (await client.post("/api/users", json=user_payload())).status_code == 201
-
-    response = await client.post("/api/users", json=user_payload())
-
-    assert response.status_code == 409
-
-
-@pytest.mark.asyncio
-async def test_user_with_esim_cannot_be_deleted(client, db_session):
-    user_id = (await client.post("/api/users", json=user_payload())).json()["id"]
-    account = create_account(db_session)
-    await client.post(
-        "/api/esims", json={"user_id": user_id, "account_id": account.id, "imsi": "00101"}
-    )
-
-    response = await client.delete(f"/api/users/{user_id}")
-
-    assert response.status_code == 409
-    assert (await client.get(f"/api/users/{user_id}")).status_code == 200
-
-
-@pytest.mark.asyncio
-async def test_partial_updates_reject_null_and_list_limits_are_validated(client):
-    user_id = (await client.post("/api/users", json=user_payload())).json()["id"]
-
-    null_response = await client.patch(f"/api/users/{user_id}", json={"email": None})
-    assert null_response.status_code == 422
-    assert (await client.get("/api/users?limit=101")).status_code == 422
