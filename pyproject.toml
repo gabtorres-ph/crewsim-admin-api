@@ -24,13 +24,21 @@ dev = [
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-testpaths = ["tests", "app"]
+testpaths = ["app"]
 
 [tool.ruff]
 line-length = 100
+extend-exclude = ["migrations/versions"]
 
 [tool.coverage.run]
 source = ["app"]
+
+[tool.hatch.build]
+exclude = [
+  "/app/**/test_*.py",
+  "/conftest.py",
+  "/venv",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]

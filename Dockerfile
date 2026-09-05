@@ -17,7 +17,7 @@ RUN python -m pip install --no-cache-dir --upgrade pip \
     && python -m pip install --no-cache-dir --requirement requirements.lock
 
 COPY --chown=app:app app ./app
-COPY --chown=app:app alembic ./alembic
+COPY --chown=app:app migrations ./migrations
 COPY --chown=app:app alembic.ini ./alembic.ini
 
 USER 10001:10001
