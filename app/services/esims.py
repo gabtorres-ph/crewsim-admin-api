@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.common.exceptions import ResourceNotFoundError
 from app.common.manager import TransactionalManager
 from app.models import ESIM
-from app.repositories.accounts import AccountRepository
+from app.repositories.accounts import AccountResourceAccess
 from app.repositories.esims import ESIMRepository
 from app.repositories.users import UserRepository
 from app.schemas.esims import ESIMCreate, ESIMUpdate
@@ -16,7 +16,7 @@ class ESIMService(TransactionalManager):
         super().__init__(session)
         self.esims = ESIMRepository(session)
         self.users = UserRepository(session)
-        self.accounts = AccountRepository(session)
+        self.accounts = AccountResourceAccess(session)
 
     def create_esim(self, data: ESIMCreate) -> ESIM:
         values = data.model_dump()

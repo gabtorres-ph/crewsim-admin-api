@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 from app.common.exceptions import ResourceNotFoundError
 from app.common.manager import TransactionalManager
 from app.models import Account
-from app.repositories.accounts import AccountResourceAccess
-from app.schemas.accounts import AccountCreate, AccountUpdate
+from app.accounts.manager import AccountResourceAccess
+from app.accounts.schemas import AccountCreate, AccountUpdate
 
 
 class AccountManager(TransactionalManager):
@@ -40,3 +40,4 @@ class AccountManager(TransactionalManager):
             lambda: self.accounts.delete(account),
             conflict_message="The account cannot be deleted while it is referenced by other data",
         )
+
