@@ -2,10 +2,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.common.resource_access import CRUDResourceAccess
-from app.models import ESIM
+from app.esims.models import ESIM
 
 
-class ESIMRepository(CRUDResourceAccess[ESIM]):
+class ESIMResourceAccess(CRUDResourceAccess[ESIM]):
     def __init__(self, session: Session) -> None:
         super().__init__(session, ESIM)
 

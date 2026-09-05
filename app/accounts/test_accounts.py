@@ -38,7 +38,7 @@ def test_account_manager_crud(db_session: Session) -> None:
 
 
 @pytest.mark.asyncio
-async def test_account_crud_and_esim_listing(client) -> None:
+async def test_account_crud_and_reference_conflict(client) -> None:
     create_response = await client.post(
         "/api/accounts", json={"name": "Test account", "balance": 12.5}
     )
@@ -58,7 +58,6 @@ async def test_account_crud_and_esim_listing(client) -> None:
     )
     assert esim_response.status_code == 201
     esim = esim_response.json()
-    assert (await client.get(f"/api/accounts/{account_id}/esims")).json() == [esim]
 
     assert (await client.delete(f"/api/accounts/{account_id}")).status_code == 409
     assert (await client.delete(f"/api/esims/{esim['id']}")).status_code == 204

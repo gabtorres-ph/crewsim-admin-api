@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 
 from app.accounts.models import Account
 from app.common.exceptions import ResourceConflictError
-from app.schemas.esims import ESIMCreate
-from app.services.esims import ESIMService
+from app.esims.manager import ESIMManager
+from app.esims.schemas import ESIMCreate
 from app.users.manager import UserManager
 from app.users.resource_access import UserResourceAccess
 from app.users.schemas import UserCreate
@@ -63,7 +63,7 @@ def test_user_manager_returns_conflict_for_duplicate_email(db_session: Session) 
 
 def test_user_delete_rolls_back_when_esim_references_user(db_session: Session) -> None:
     users = UserManager(db_session)
-    esims = ESIMService(db_session)
+    esims = ESIMManager(db_session)
     account = create_account(db_session)
     user = users.create_user(make_user_data())
     esims.create_esim(ESIMCreate(user_id=user.id, account_id=account.id, imsi="12345"))

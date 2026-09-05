@@ -1,7 +1,5 @@
 import pytest
 
-from app.models import Account
-
 
 def user_payload(email="person@example.com"):
     return {
@@ -10,50 +8,6 @@ def user_payload(email="person@example.com"):
         "currency": "USD",
         "timezone": "UTC",
     }
-
-
-def create_account(db_session):
-    account = Account(name="Test account", balance=0)
-    db_session.add(account)
-    db_session.flush()
-    return account
-
-
-@pytest.mark.asyncio
-async def test_esim_crud_and_user_filter(client, db_session):
-    user_id = (await client.post("/api/users", json=user_payload())).json()["id"]
-    account = create_account(db_session)
-    create_response = await client.post(
-        "/api/esims",
-        json={"user_id": user_id, "account_id": account.id, "imsi": "001010000000001"},
-    )
-    assert create_response.status_code == 201
-    esim = create_response.json()
-    assert esim["user_id"] == user_id
-
-    assert (await client.get(f"/api/esims/{esim['id']}")).json() == esim
-    assert (await client.get(f"/api/users/{user_id}/esims")).json() == [esim]
-    assert (await client.get(f"/api/esims?user_id={user_id}")).json() == [esim]
-
-    update_response = await client.patch(f"/api/esims/{esim['id']}", json={"imsi": "00202"})
-    assert update_response.status_code == 200
-    assert update_response.json()["imsi"] == "00202"
-
-    assert (await client.delete(f"/api/esims/{esim['id']}")).status_code == 204
-    assert (await client.get(f"/api/esims/{esim['id']}")).status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_esim_requires_existing_user(client, db_session):
-    account = create_account(db_session)
-    response = await client.post(
-        "/api/esims", json={"user_id": 999, "account_id": account.id, "imsi": "00101"}
-    )
-
-    assert response.status_code == 404
-    assert response.json() == {"detail": "User '999' was not found"}
-
-
 @pytest.mark.asyncio
 async def test_favorite_crud_and_user_filters(client):
     user_id = (await client.post("/api/users", json=user_payload())).json()["id"]

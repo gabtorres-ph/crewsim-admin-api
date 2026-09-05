@@ -5,16 +5,16 @@ from sqlalchemy.orm import Session
 from app.accounts.resource_access import AccountResourceAccess
 from app.common.exceptions import ResourceNotFoundError
 from app.common.manager import TransactionalManager
-from app.models import ESIM
-from app.repositories.esims import ESIMRepository
-from app.schemas.esims import ESIMCreate, ESIMUpdate
+from app.esims.models import ESIM
+from app.esims.resource_access import ESIMResourceAccess
+from app.esims.schemas import ESIMCreate, ESIMUpdate
 from app.users.resource_access import UserResourceAccess
 
 
-class ESIMService(TransactionalManager):
+class ESIMManager(TransactionalManager):
     def __init__(self, session: Session) -> None:
         super().__init__(session)
-        self.esims = ESIMRepository(session)
+        self.esims = ESIMResourceAccess(session)
         self.users = UserResourceAccess(session)
         self.accounts = AccountResourceAccess(session)
 
