@@ -2,6 +2,9 @@
 
 FastAPI service for the crewsim admin API.
 
+See [Architecture](docs/architecture.md) for the source layout, dependency rules, and guidance on
+adding a domain.
+
 ## Local development with UV
 
 [UV](https://docs.astral.sh/uv/) is the primary package manager for this project. Bootstrap it
@@ -17,14 +20,34 @@ uv sync --active --extra dev
 On Windows, activate the environment with `venv\Scripts\activate` instead. The `--active` flag
 tells UV to install the locked dependencies into the activated `venv` environment.
 
+Copy the development environment template before running commands that connect to PostgreSQL:
+
+```bash
+cp .env.example .env
+```
+
+The template uses `DB_HOST=db` for Compose. When running the application, migrations, or seed
+command directly on the host, set `DB_HOST=localhost` in `.env` (or in the command environment).
+
+Apply migrations and start the local API with:
+
+```bash
+uv run --active alembic upgrade head
+uv run --active uvicorn app.main:app --reload
+```
+
+The API is available at `http://localhost:8000`, with interactive documentation at
+`http://localhost:8000/docs`.
+
 ## Run with Docker Compose
 
-The Compose stack runs three services:
+The Compose stack runs four services:
 
 - `db`: PostgreSQL with data stored in the `postgres_data` named volume.
 - `migrate`: a one-shot job that applies all Alembic migrations.
 - `api`: the FastAPI application, started only after the database is healthy and migrations
   complete successfully.
+- `pgadmin`: a local pgAdmin UI, available on `http://localhost:5051` by default.
 
 Docker with the Compose plugin is required. Copy the development defaults and start the stack:
 
@@ -87,6 +110,32 @@ docker compose down
 
 To intentionally remove the local database as well, run `docker compose down --volumes`.
 This permanently deletes the Compose-managed PostgreSQL volume.
+
+## Database migrations
+
+Alembic configuration lives in `alembic.ini`, and migration scripts live in `migrations/`.
+With the development environment active and database settings configured, use:
+
+```bash
+# Show the revision history and current migration heads
+uv run --active alembic history
+uv run --active alembic heads
+
+# Apply all pending migrations
+uv run --active alembic upgrade head
+
+# Confirm that the SQLAlchemy models require no new migration
+uv run --active alembic check
+```
+
+To generate a migration after an intentional model change, run:
+
+```bash
+uv run --active alembic revision --autogenerate -m "describe the change"
+```
+
+Review generated migrations before applying them. Model discovery is configured in
+`migrations/env.py`; a new domain model must be imported there.
 
 ## Configuration
 
@@ -190,9 +239,19 @@ UV bootstrap; manage project packages with UV after that.
 ## Development checks
 
 ```bash
+# Confirm every colocated test is discovered once
+uv run --active pytest --collect-only
+
+# Run tests and lint checks
 uv run --active pytest
 uv run --active ruff check .
+
+# Build and inspect production package artifacts
+uv build
 ```
+
+Tests live beside their owning modules under `app/`; shared fixtures live in `conftest.py`.
+Production package and Docker builds exclude the colocated test modules and `conftest.py`.
 
 ## TODOs
 
