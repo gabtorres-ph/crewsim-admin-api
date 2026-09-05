@@ -7,8 +7,10 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.accounts.models import Account
 from app.database import SessionLocal
-from app.models import ESIM, Account, User
+from app.esims.models import ESIM
+from app.users.models import User
 
 
 @dataclass(frozen=True)

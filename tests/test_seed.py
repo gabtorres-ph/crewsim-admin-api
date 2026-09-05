@@ -1,8 +1,9 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import ESIM, User
+from app.esims.models import ESIM
 from app.seed import SEED_RECORDS, seed_database
+from app.users.models import User
 
 
 def test_seed_database_creates_requested_user_esim_pairs(db_session: Session):

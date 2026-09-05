@@ -2,10 +2,13 @@ from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
 
-import app.models  # noqa: F401 - import models so Alembic can discover their metadata
 from alembic import context
+from app.accounts import models as account_models  # noqa: F401
 from app.config import get_settings
 from app.database import Base
+from app.esims import models as esim_models  # noqa: F401
+from app.favorites import models as favorite_models  # noqa: F401
+from app.users import models as user_models  # noqa: F401
 
 config = context.config
 
