@@ -8,7 +8,7 @@ from app.database import Base
 
 if TYPE_CHECKING:
     from app.esims.models import ESIM
-    from app.models import Favorite
+    from app.favorites.models import Favorite
 
 
 class User(Base):

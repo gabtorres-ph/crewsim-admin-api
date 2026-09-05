@@ -4,8 +4,6 @@ from fastapi import APIRouter, Depends, Path, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas.favorites import FavoriteRead
-from app.services.favorites import FavoriteService
 from app.users.manager import UserManager
 from app.users.schemas import UserCreate, UserRead, UserUpdate
 
@@ -43,13 +41,3 @@ def update_user(
 def delete_user(user_id: Annotated[int, Path(gt=0)], db: DatabaseSession) -> Response:
     UserManager(db).delete_user(user_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-@router.get("/{user_id}/favorites", response_model=list[FavoriteRead])
-def list_user_favorites(
-    user_id: Annotated[int, Path(gt=0)],
-    db: DatabaseSession,
-    offset: Annotated[int, Query(ge=0)] = 0,
-    limit: Annotated[int, Query(ge=1, le=100)] = 100,
-) -> list[FavoriteRead]:
-    return FavoriteService(db).list_favorites(user_id=user_id, offset=offset, limit=limit)

@@ -2,10 +2,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.common.resource_access import CRUDResourceAccess
-from app.models import Favorite
+from app.favorites.models import Favorite
 
 
-class FavoriteRepository(CRUDResourceAccess[Favorite]):
+class FavoriteResourceAccess(CRUDResourceAccess[Favorite]):
     def __init__(self, session: Session) -> None:
         super().__init__(session, Favorite)
 

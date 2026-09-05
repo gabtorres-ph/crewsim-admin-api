@@ -1,15 +1,17 @@
 import pytest
 
 
-def user_payload(email="person@example.com"):
+def user_payload(email: str = "person@example.com") -> dict[str, str]:
     return {
         "email": email,
         "language": "en",
         "currency": "USD",
         "timezone": "UTC",
     }
+
+
 @pytest.mark.asyncio
-async def test_favorite_crud_and_user_filters(client):
+async def test_favorite_crud_and_user_filters(client) -> None:
     user_id = (await client.post("/api/users", json=user_payload())).json()["id"]
     create_response = await client.post(
         "/api/favorites", json={"user_id": user_id, "country": "Japan"}
@@ -28,7 +30,7 @@ async def test_favorite_crud_and_user_filters(client):
 
 
 @pytest.mark.asyncio
-async def test_favorite_duplicate_and_missing_resource_handling(client):
+async def test_favorite_duplicate_and_missing_resource_handling(client) -> None:
     user_id = (await client.post("/api/users", json=user_payload())).json()["id"]
     payload = {"user_id": user_id, "country": "Japan"}
     assert (await client.post("/api/favorites", json=payload)).status_code == 201
@@ -40,7 +42,9 @@ async def test_favorite_duplicate_and_missing_resource_handling(client):
         await client.post("/api/users", json=user_payload("second@example.com"))
     ).json()["id"]
     assert (
-        await client.post("/api/favorites", json={"user_id": second_user_id, "country": "Japan"})
+        await client.post(
+            "/api/favorites", json={"user_id": second_user_id, "country": "Japan"}
+        )
     ).status_code == 201
 
     missing_user_response = await client.post(

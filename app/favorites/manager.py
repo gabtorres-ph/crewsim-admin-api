@@ -2,16 +2,16 @@ from sqlalchemy.orm import Session
 
 from app.common.exceptions import ResourceNotFoundError
 from app.common.manager import TransactionalManager
-from app.models import Favorite
-from app.repositories.favorites import FavoriteRepository
-from app.schemas.favorites import FavoriteCreate
+from app.favorites.models import Favorite
+from app.favorites.resource_access import FavoriteResourceAccess
+from app.favorites.schemas import FavoriteCreate
 from app.users.resource_access import UserResourceAccess
 
 
-class FavoriteService(TransactionalManager):
+class FavoriteManager(TransactionalManager):
     def __init__(self, session: Session) -> None:
         super().__init__(session)
-        self.favorites = FavoriteRepository(session)
+        self.favorites = FavoriteResourceAccess(session)
         self.users = UserResourceAccess(session)
 
     def create_favorite(self, data: FavoriteCreate) -> Favorite:
