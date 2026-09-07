@@ -9,6 +9,7 @@ from app.database import Base
 from app.esims import models as esim_models  # noqa: F401
 from app.favorites import models as favorite_models  # noqa: F401
 from app.packages import models as package_models  # noqa: F401
+from app.usage import models as usage_models  # noqa: F401
 from app.users import models as user_models  # noqa: F401
 
 config = context.config

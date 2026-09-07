@@ -34,6 +34,8 @@ core-crewsim/
 │   ├── users/                      # Same domain file layout
 │   ├── esims/                      # Same domain file layout
 │   ├── favorites/                  # Same domain file layout
+│   ├── packages/                   # Same domain file layout
+│   ├── usage/                      # Same domain file layout
 │   ├── test_architecture.py
 │   ├── test_config.py
 │   ├── test_main.py

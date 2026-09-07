@@ -15,6 +15,7 @@ DOMAIN_MODEL_MODULES = (
     "app.esims.models",
     "app.favorites.models",
     "app.packages.models",
+    "app.usage.models",
 )
 REMOVED_IMPORT_SUFFIXES = (
     "db",
@@ -25,7 +26,7 @@ REMOVED_IMPORT_SUFFIXES = (
     "repositories",
 )
 REMOVED_IMPORT_PREFIXES = tuple(f"app.{suffix}" for suffix in REMOVED_IMPORT_SUFFIXES)
-EXPECTED_TABLES = {"accounts", "users", "esims", "favorites", "packages"}
+EXPECTED_TABLES = {"accounts", "users", "esims", "favorites", "packages", "usage"}
 
 
 def _imports(path: Path) -> set[str]:
