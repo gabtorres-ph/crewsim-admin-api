@@ -11,6 +11,7 @@ from app.database import Base, get_db
 from app.esims import models as esim_models  # noqa: F401
 from app.favorites import models as favorite_models  # noqa: F401
 from app.main import app
+from app.packages import models as package_models  # noqa: F401
 from app.users import models as user_models  # noqa: F401
 
 
