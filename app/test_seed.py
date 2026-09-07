@@ -39,3 +39,25 @@ def test_seed_database_is_repeatable(db_session: Session):
     assert second_result.existing_esims == 8
     assert db_session.scalar(select(func.count()).select_from(User)) == 8
     assert db_session.scalar(select(func.count()).select_from(ESIM)) == 8
+
+
+def test_seed_records_support_dense_paginated_tables(db_session: Session):
+    result = seed_database(db_session, SEED_RECORDS)
+
+    assert len(SEED_RECORDS) == 100
+    assert result.created_users == 100
+    assert result.created_esims == 100
+    assert len({record.email for record in SEED_RECORDS}) == 100
+    assert len({record.imsi for record in SEED_RECORDS}) == 100
+
+    user = db_session.scalar(select(User).where(User.email == SEED_RECORDS[-1].email))
+    esim = db_session.scalar(select(ESIM).where(ESIM.imsi == SEED_RECORDS[-1].imsi))
+
+    assert user is not None
+    assert user.firstname == SEED_RECORDS[-1].firstname
+    assert user.airline == SEED_RECORDS[-1].airline
+    assert user.createdate == SEED_RECORDS[-1].createdate
+    assert esim is not None
+    assert esim.name == SEED_RECORDS[-1].esim_name
+    assert esim.networkstatus == SEED_RECORDS[-1].networkstatus
+    assert esim.imei_device == SEED_RECORDS[-1].imei_device
