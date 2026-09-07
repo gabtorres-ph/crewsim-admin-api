@@ -11,6 +11,7 @@ from app.database import Base
 APP_ROOT = Path(__file__).parent
 DOMAIN_MODEL_MODULES = (
     "app.accounts.models",
+    "app.crew.models",
     "app.users.models",
     "app.esims.models",
     "app.favorites.models",
@@ -26,7 +27,7 @@ REMOVED_IMPORT_SUFFIXES = (
     "repositories",
 )
 REMOVED_IMPORT_PREFIXES = tuple(f"app.{suffix}" for suffix in REMOVED_IMPORT_SUFFIXES)
-EXPECTED_TABLES = {"accounts", "users", "esims", "favorites", "packages", "usage"}
+EXPECTED_TABLES = {"accounts", "crewid", "users", "esims", "favorites", "packages", "usage"}
 
 
 def _imports(path: Path) -> set[str]:
