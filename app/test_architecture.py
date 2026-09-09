@@ -17,6 +17,7 @@ DOMAIN_MODEL_MODULES = (
     "app.esims.models",
     "app.favorites.models",
     "app.packages.models",
+    "app.stripe.models",
     "app.usage.models",
 )
 REMOVED_IMPORT_SUFFIXES = (
@@ -36,8 +37,15 @@ EXPECTED_TABLES = {
     "esims",
     "favorites",
     "packages",
+    "stripenotification",
     "usage",
 }
+DOMAIN_LAYER_MODULES = (
+    "app.stripe.schemas",
+    "app.stripe.resource_access",
+    "app.stripe.manager",
+    "app.stripe.routes",
+)
 
 
 def _imports(path: Path) -> set[str]:
@@ -75,3 +83,8 @@ def test_router_and_domain_models_are_registered() -> None:
 
     assert isinstance(routes.api_router, APIRouter)
     assert set(Base.metadata.tables) == EXPECTED_TABLES
+
+
+def test_stripe_domain_layers_are_importable() -> None:
+    for module in DOMAIN_LAYER_MODULES:
+        importlib.import_module(module)
