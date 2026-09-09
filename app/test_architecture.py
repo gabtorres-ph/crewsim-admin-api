@@ -17,6 +17,7 @@ DOMAIN_MODEL_MODULES = (
     "app.esims.models",
     "app.favorites.models",
     "app.packages.models",
+    "app.stripe.models",
     "app.usage.models",
 )
 REMOVED_IMPORT_SUFFIXES = (
@@ -36,6 +37,7 @@ EXPECTED_TABLES = {
     "esims",
     "favorites",
     "packages",
+    "stripenotification",
     "usage",
 }
 
