@@ -2,15 +2,15 @@ from sqlalchemy.orm import Session
 
 from app.common.exceptions import ResourceNotFoundError
 from app.common.manager import TransactionalManager
-from app.common.resource_access import CRUDResourceAccess
 from app.stripe.models import StripeNotification
+from app.stripe.resource_access import StripeNotificationResourceAccess
 from app.stripe.schemas import StripeNotificationCreate, StripeNotificationUpdate
 
 
 class StripeManager(TransactionalManager):
     def __init__(self, session: Session) -> None:
         super().__init__(session)
-        self.notifications = CRUDResourceAccess(session, StripeNotification)
+        self.notifications = StripeNotificationResourceAccess(session)
 
     def create_notification(self, data: StripeNotificationCreate) -> StripeNotification:
         return self._write(
