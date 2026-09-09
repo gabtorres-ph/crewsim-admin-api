@@ -7,6 +7,7 @@ from app.accounts import models as account_models  # noqa: F401
 from app.config import get_settings
 from app.crew import models as crew_models  # noqa: F401
 from app.database import Base
+from app.email import models as email_models  # noqa: F401
 from app.esims import models as esim_models  # noqa: F401
 from app.favorites import models as favorite_models  # noqa: F401
 from app.packages import models as package_models  # noqa: F401
