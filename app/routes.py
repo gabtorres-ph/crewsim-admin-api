@@ -9,6 +9,7 @@ from app.esims.routes import user_router as user_esims_router
 from app.favorites.routes import router as favorites_router
 from app.favorites.routes import user_router as user_favorites_router
 from app.packages.routes import router as packages_router
+from app.sms.routes import router as sms_router
 from app.stripe.routes import router as stripe_notifs_router
 from app.usage.routes import router as usage_router
 from app.users.routes import router as users_router
@@ -24,6 +25,7 @@ api_router.include_router(user_favorites_router)
 api_router.include_router(esims_router)
 api_router.include_router(favorites_router)
 api_router.include_router(packages_router)
+api_router.include_router(sms_router)
 api_router.include_router(usage_router)
 api_router.include_router(stripe_notifs_router)
 
