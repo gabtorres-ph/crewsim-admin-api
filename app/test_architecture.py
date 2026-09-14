@@ -17,6 +17,7 @@ DOMAIN_MODEL_MODULES = (
     "app.esims.models",
     "app.favorites.models",
     "app.packages.models",
+    "app.sms.models",
     "app.stripe.models",
     "app.usage.models",
 )
@@ -37,6 +38,7 @@ EXPECTED_TABLES = {
     "esims",
     "favorites",
     "packages",
+    "sms",
     "stripenotification",
     "usage",
 }
