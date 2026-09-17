@@ -12,6 +12,7 @@ APP_ROOT = Path(__file__).parent
 DOMAIN_MODEL_MODULES = (
     "app.accounts.models",
     "app.crew.models",
+    "app.currencies.models",
     "app.email.models",
     "app.users.models",
     "app.esims.models",
@@ -34,6 +35,7 @@ REMOVED_IMPORT_PREFIXES = tuple(f"app.{suffix}" for suffix in REMOVED_IMPORT_SUF
 EXPECTED_TABLES = {
     "accounts",
     "crewid",
+    "currencies",
     "email_whitelist",
     "users",
     "esims",

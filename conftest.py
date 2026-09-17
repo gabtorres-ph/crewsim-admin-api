@@ -8,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.accounts import models as account_models  # noqa: F401
 from app.crew import models as crew_models  # noqa: F401
+from app.currencies import models as currency_models  # noqa: F401
 from app.database import Base, get_db
 from app.esims import models as esim_models  # noqa: F401
 from app.favorites import models as favorite_models  # noqa: F401
