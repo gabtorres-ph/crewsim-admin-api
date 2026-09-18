@@ -15,6 +15,7 @@ from app.favorites import models as favorite_models  # noqa: F401
 from app.language import models as language_models  # noqa: F401
 from app.packages import models as package_models  # noqa: F401
 from app.stripe import models as stripe_models  # noqa: F401
+from app.timezone import models as timezone_models  # noqa: F401
 from app.usage import models as usage_models  # noqa: F401
 from app.users import models as user_models  # noqa: F401
 

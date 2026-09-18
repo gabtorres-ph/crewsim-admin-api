@@ -139,6 +139,13 @@ uv run --active alembic revision --autogenerate -m "describe the change"
 Review generated migrations before applying them. Model discovery is configured in
 `migrations/env.py`; a new domain model must be imported there.
 
+The `timezone` domain maps to `time_zone` (`name TEXT PRIMARY KEY`,
+`created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`). Its migration automatically seeds
+IANA timezone identifiers, including aliases and `UTC`, from PostgreSQL's
+`pg_timezone_names` catalog, excluding host-local entries and `posix/` and `right/`
+duplicates. The seeded identifiers reflect the database server's installed timezone
+data when the migration runs; no separate development seed command is needed.
+
 ## Configuration
 
 Compose reads development settings from `.env`. It defaults `DB_HOST` to the container-safe

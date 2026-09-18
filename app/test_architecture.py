@@ -21,6 +21,7 @@ DOMAIN_MODEL_MODULES = (
     "app.packages.models",
     "app.sms.models",
     "app.stripe.models",
+    "app.timezone.models",
     "app.usage.models",
 )
 REMOVED_IMPORT_SUFFIXES = (
@@ -44,6 +45,7 @@ EXPECTED_TABLES = {
     "packages",
     "sms",
     "stripenotification",
+    "time_zone",
     "usage",
 }
 DOMAIN_LAYER_MODULES = (

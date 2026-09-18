@@ -16,6 +16,7 @@ from app.language import models as language_models  # noqa: F401
 from app.main import app
 from app.packages import models as package_models  # noqa: F401
 from app.sms import models as sms_models  # noqa: F401
+from app.timezone import models as timezone_models  # noqa: F401
 from app.usage import models as usage_models  # noqa: F401
 from app.users import models as user_models  # noqa: F401
 

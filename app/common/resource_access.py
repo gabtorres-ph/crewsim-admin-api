@@ -16,7 +16,7 @@ class CRUDResourceAccess(Generic[ModelT]):
         self.session = session
         self.model = model
 
-    def get(self, object_id: int) -> ModelT | None:
+    def get(self, object_id: object) -> ModelT | None:
         return self.session.get(self.model, object_id)
 
     def list(self, *, offset: int = 0, limit: int = 100) -> list[ModelT]:
