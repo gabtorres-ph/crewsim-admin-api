@@ -4,6 +4,7 @@ from argparse import ArgumentParser
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -11,6 +12,8 @@ from sqlalchemy.orm import Session
 from app.accounts.models import Account
 from app.database import SessionLocal
 from app.esims.models import ESIM
+from app.favorites.models import Favorite  # noqa: F401 -- registers User relationship target
+from app.usage.models import Usage
 from app.users.models import User
 
 
@@ -52,6 +55,40 @@ class SeedResult:
     existing_users: int
     created_esims: int
     existing_esims: int
+    created_usage: int
+    existing_usage: int
+
+
+@dataclass(frozen=True)
+class UsageSeedRecord:
+    usage_date_utc: datetime
+    session_id: str
+    mcc: int
+    mnc: int
+    total_qty: int
+    usage_type_id: int
+    usage_type: str
+    dest_phone_number: str | None
+    subs_reseller_name: str
+    custo_account_name: str
+    subs_account_name: str
+    subscriber_id: int
+    imsi: str
+    iccid: str
+    subs_phone_number: str
+    prepaid_package_ids: str
+    prepaid_package_qtys: str
+    toll_free: str
+    custo_account_id: int | None
+    custo_charge: Decimal | None
+    subs_account_id: int | None
+    subs_charge: Decimal | None
+    apn: str
+    rat: int
+    imei: str
+    down_bitrate: int
+    up_bitrate: int
+    filename: str
 
 
 SEED_PROFILES = (
@@ -69,6 +106,23 @@ SEED_PROFILES = (
 
 NETWORK_STATUSES = ("online", "offline", "activating", "suspended")
 DEVICE_MODELS = ("iPhone 16 Pro", "Pixel 10", "Galaxy S26", "iPad Air", "Crew Router")
+MOBILE_NETWORKS = (
+    (310, 260),  # United States
+    (222, 1),  # Italy
+    (440, 10),  # Japan
+    (515, 2),  # Philippines
+    (724, 5),  # Brazil
+    (208, 1),  # France
+    (620, 1),  # Ghana
+    (505, 1),  # Australia
+    (262, 2),  # Germany
+    (404, 45),  # India
+)
+USAGE_TYPES = (
+    (1, "data"),
+    (2, "voice"),
+    (3, "sms"),
+)
 # Database columns use timezone-naive datetimes throughout the existing model.
 SEED_START_DATE = datetime(2025, 1, 15, 8, 30)  # noqa: DTZ001
 
@@ -117,13 +171,87 @@ def build_seed_record(number: int) -> SeedRecord:
 SEED_RECORDS = tuple(build_seed_record(number) for number in range(1, 101))
 
 
+def build_usage_seed_record(
+    subscriber_number: int, event_number: int, seed: SeedRecord
+) -> UsageSeedRecord:
+    """Build one usage event linked to a deterministic seeded eSIM."""
+    usage_type_id, usage_type = USAGE_TYPES[event_number]
+    mcc, mnc = MOBILE_NETWORKS[(subscriber_number + event_number - 1) % len(MOBILE_NETWORKS)]
+    usage_date = seed.esim_createdate + timedelta(
+        days=event_number * 4 + subscriber_number % 7,
+        hours=event_number * 3,
+    )
+    destination = None
+    total_qty = 5_000_000 + subscriber_number * 73_421
+    custo_charge = Decimal(total_qty) / Decimal(1_000_000_000)
+    subs_charge = custo_charge * Decimal("1.35")
+    down_bitrate = 50_000_000 + subscriber_number * 100_000
+    up_bitrate = 10_000_000 + subscriber_number * 50_000
+
+    if usage_type == "voice":
+        destination = f"+1800555{subscriber_number:04d}"
+        total_qty = 30 + subscriber_number % 271
+        custo_charge = Decimal(total_qty) * Decimal("0.0025")
+        subs_charge = Decimal(total_qty) * Decimal("0.0040")
+        down_bitrate = 64_000
+        up_bitrate = 64_000
+    elif usage_type == "sms":
+        destination = f"+4477009{subscriber_number:04d}"
+        total_qty = 1 + subscriber_number % 3
+        custo_charge = Decimal(total_qty) * Decimal("0.015")
+        subs_charge = Decimal(total_qty) * Decimal("0.025")
+        down_bitrate = 0
+        up_bitrate = 0
+
+    return UsageSeedRecord(
+        usage_date_utc=usage_date,
+        session_id=f"seed-{seed.imsi}-{event_number + 1}",
+        mcc=mcc,
+        mnc=mnc,
+        total_qty=total_qty,
+        usage_type_id=usage_type_id,
+        usage_type=usage_type,
+        dest_phone_number=destination,
+        subs_reseller_name="CrewSim",
+        custo_account_name="Seed account",
+        subs_account_name=f"{seed.firstname} {seed.lastname}",
+        subscriber_id=10_000 + subscriber_number,
+        imsi=seed.imsi,
+        iccid=f"8944700000000{subscriber_number:06d}",
+        subs_phone_number=f"+63917{subscriber_number:07d}",
+        prepaid_package_ids=str(100 + subscriber_number % 5),
+        prepaid_package_qtys="1",
+        toll_free="true" if usage_type == "voice" and subscriber_number % 4 == 0 else "false",
+        custo_account_id=5_001,
+        custo_charge=custo_charge.quantize(Decimal("0.000000000000001")),
+        subs_account_id=6_000 + subscriber_number,
+        subs_charge=subs_charge.quantize(Decimal("0.000000000000001")),
+        apn="global.crewsim.test",
+        rat=(4, 5, 6)[(subscriber_number + event_number) % 3],
+        imei=seed.imei or f"3569380356{subscriber_number:05d}",
+        down_bitrate=down_bitrate,
+        up_bitrate=up_bitrate,
+        filename=f"usage-{usage_date:%Y%m%d}.csv",
+    )
+
+
+SEED_USAGE_RECORDS = tuple(
+    build_usage_seed_record(subscriber_number, event_number, seed)
+    for subscriber_number, seed in enumerate(SEED_RECORDS, start=1)
+    for event_number in range(len(USAGE_TYPES))
+)
+
+
 def seed_database(session: Session, records: Sequence[SeedRecord]) -> SeedResult:
     """Insert missing seed records in one transaction and leave existing data unchanged."""
     emails = [record.email for record in records]
     imsis = [record.imsi for record in records]
+    requested_usage = [record for record in SEED_USAGE_RECORDS if record.imsi in imsis]
+    session_ids = [record.session_id for record in requested_usage]
 
     created_users = 0
     created_esims = 0
+    created_usage = 0
 
     with session.begin():
         account = session.scalar(select(Account).where(Account.name == "Seed account"))
@@ -138,6 +266,9 @@ def seed_database(session: Session, records: Sequence[SeedRecord]) -> SeedResult
         esims_by_imsi = {
             esim.imsi: esim for esim in session.scalars(select(ESIM).where(ESIM.imsi.in_(imsis)))
         }
+        existing_usage_session_ids = set(
+            session.scalars(select(Usage.session_id).where(Usage.session_id.in_(session_ids)))
+        )
 
         for record in records:
             user = users_by_email.get(record.email)
@@ -192,11 +323,21 @@ def seed_database(session: Session, records: Sequence[SeedRecord]) -> SeedResult
                     f"not {user.id} ({record.email})"
                 )
 
+        for record in requested_usage:
+            if record.session_id in existing_usage_session_ids:
+                continue
+
+            session.add(Usage(**record.__dict__))
+            existing_usage_session_ids.add(record.session_id)
+            created_usage += 1
+
     return SeedResult(
         created_users=created_users,
         existing_users=len(records) - created_users,
         created_esims=created_esims,
         existing_esims=len(records) - created_esims,
+        created_usage=created_usage,
+        existing_usage=len(requested_usage) - created_usage,
     )
 
 
@@ -221,7 +362,8 @@ def main() -> None:
     print(
         "Seed complete: "
         f"users {result.created_users} created/{result.existing_users} existing; "
-        f"eSIMs {result.created_esims} created/{result.existing_esims} existing."
+        f"eSIMs {result.created_esims} created/{result.existing_esims} existing; "
+        f"usage {result.created_usage} created/{result.existing_usage} existing."
     )
 
 

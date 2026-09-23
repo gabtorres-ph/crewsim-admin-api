@@ -67,16 +67,17 @@ The interactive API documentation is at `http://localhost:8000/docs`.
 
 ### Seed data for frontend testing
 
-After the database migrations have completed, create 100 deterministic user/eSIM pairs.
-The fixtures include varied profile, device, status, balance, and date values to exercise
-pagination and information-dense tables:
+After the database migrations have completed, create 100 deterministic user/eSIM pairs and
+300 linked usage events. The fixtures include varied profile, device, status, balance, date,
+network, data, voice, and SMS values to exercise pagination and information-dense tables:
 
 ```bash
 docker compose exec api python -m app.seed
 ```
 
-The command is safe to run more than once: existing seed users and eSIMs are left unchanged.
-Use `--count` to create between 1 and 100 pairs instead of the default 100:
+The command is safe to run more than once: existing seed users, eSIMs, and usage events are left
+unchanged. Use `--count` to create between 1 and 100 pairs (with three usage events per pair)
+instead of the default 100:
 
 ```bash
 docker compose exec api python -m app.seed --count 25

@@ -2,7 +2,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.esims.models import ESIM
-from app.seed import SEED_RECORDS, seed_database
+from app.seed import SEED_RECORDS, SEED_USAGE_RECORDS, seed_database
+from app.usage.models import Usage
 from app.users.models import User
 
 
@@ -15,8 +16,11 @@ def test_seed_database_creates_requested_user_esim_pairs(db_session: Session):
     assert result.existing_users == 0
     assert result.created_esims == 5
     assert result.existing_esims == 0
+    assert result.created_usage == 15
+    assert result.existing_usage == 0
     assert db_session.scalar(select(func.count()).select_from(User)) == 5
     assert db_session.scalar(select(func.count()).select_from(ESIM)) == 5
+    assert db_session.scalar(select(func.count()).select_from(Usage)) == 15
     stored_pairs = set(
         db_session.execute(
             select(User.email, ESIM.imsi).join(ESIM, ESIM.userid == User.id)
@@ -33,22 +37,29 @@ def test_seed_database_is_repeatable(db_session: Session):
 
     assert first_result.created_users == 8
     assert first_result.created_esims == 8
+    assert first_result.created_usage == 24
     assert second_result.created_users == 0
     assert second_result.existing_users == 8
     assert second_result.created_esims == 0
     assert second_result.existing_esims == 8
+    assert second_result.created_usage == 0
+    assert second_result.existing_usage == 24
     assert db_session.scalar(select(func.count()).select_from(User)) == 8
     assert db_session.scalar(select(func.count()).select_from(ESIM)) == 8
+    assert db_session.scalar(select(func.count()).select_from(Usage)) == 24
 
 
 def test_seed_records_support_dense_paginated_tables(db_session: Session):
     result = seed_database(db_session, SEED_RECORDS)
 
     assert len(SEED_RECORDS) == 100
+    assert len(SEED_USAGE_RECORDS) == 300
     assert result.created_users == 100
     assert result.created_esims == 100
+    assert result.created_usage == 300
     assert len({record.email for record in SEED_RECORDS}) == 100
     assert len({record.imsi for record in SEED_RECORDS}) == 100
+    assert len({record.session_id for record in SEED_USAGE_RECORDS}) == 300
 
     user = db_session.scalar(select(User).where(User.email == SEED_RECORDS[-1].email))
     esim = db_session.scalar(select(ESIM).where(ESIM.imsi == SEED_RECORDS[-1].imsi))
@@ -61,3 +72,15 @@ def test_seed_records_support_dense_paginated_tables(db_session: Session):
     assert esim.name == SEED_RECORDS[-1].esim_name
     assert esim.networkstatus == SEED_RECORDS[-1].networkstatus
     assert esim.imei_device == SEED_RECORDS[-1].imei_device
+
+    usage = list(
+        db_session.scalars(
+            select(Usage)
+            .where(Usage.imsi == SEED_RECORDS[-1].imsi)
+            .order_by(Usage.usage_type_id)
+        )
+    )
+    assert [record.usage_type for record in usage] == ["data", "voice", "sms"]
+    assert usage[0].dest_phone_number is None
+    assert usage[1].dest_phone_number is not None
+    assert usage[2].down_bitrate == 0
