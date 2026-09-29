@@ -9,6 +9,9 @@ x-app-environment: &app-environment
   DB_DATABASE: "${DB_DATABASE:-${POSTGRES_DB:-core_crewsim}}"
   DB_USERNAME: "${DB_USERNAME:-${POSTGRES_USER:-postgres}}"
   DB_PASSWORD: "${DB_PASSWORD:-${POSTGRES_PASSWORD:-postgres}}"
+  REDIS_HOST: "${REDIS_HOST:-redis}"
+  REDIS_PORT: "${REDIS_PORT:-6379}"
+  REDIS_DB: "${REDIS_DB:-0}"
 
 x-app-service: &app-service
   image: core-crewsim:local
@@ -35,6 +38,26 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  redis:
+    image: redis:8-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - "${REDIS_MAXMEMORY:-256mb}"
+      - --maxmemory-policy
+      - allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
   migrate:
     <<: *app-service
     command: ["alembic", "upgrade", "head"]
@@ -55,6 +78,8 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     stop_grace_period: 10s
 
