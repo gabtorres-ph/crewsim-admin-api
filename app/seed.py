@@ -2,7 +2,7 @@
 
 from argparse import ArgumentParser
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
 
@@ -13,6 +13,7 @@ from app.accounts.models import Account
 from app.database import SessionLocal
 from app.esims.models import ESIM
 from app.favorites.models import Favorite  # noqa: F401 -- registers User relationship target
+from app.stripe.models import StripeNotification
 from app.usage.models import Usage
 from app.users.models import User
 
@@ -57,6 +58,8 @@ class SeedResult:
     existing_esims: int
     created_usage: int
     existing_usage: int
+    created_stripe_notifications: int
+    existing_stripe_notifications: int
 
 
 @dataclass(frozen=True)
@@ -91,6 +94,25 @@ class UsageSeedRecord:
     filename: str
 
 
+@dataclass(frozen=True)
+class StripeSeedRecord:
+    email: str
+    eventid: str
+    invoiceid: str
+    customerid: str
+    taxrate: Decimal | None
+    taxcountry: str | None
+    amount_net: Decimal
+    amount_tax: Decimal
+    amount_gross: Decimal
+    currency: str
+    sku: str
+    state: str
+    createdate: datetime
+    imsi: str
+    amount_credit: Decimal | None
+
+
 SEED_PROFILES = (
     ("Alex", "Morgan", "en", "USD", "America/New_York", "Delta Air Lines", "Captain"),
     ("Sofia", "Rossi", "it", "EUR", "Europe/Rome", "ITA Airways", "First Officer"),
@@ -122,6 +144,20 @@ USAGE_TYPES = (
     (1, "data"),
     (2, "voice"),
     (3, "sms"),
+)
+STRIPE_STATES = ("paid", "credited", "pending", "refunded")
+STRIPE_SKUS = ("crew-data-1gb", "crew-data-5gb", "crew-global-10gb", "crew-topup")
+TAX_PROFILES = (
+    (Decimal("8.88"), "US"),
+    (Decimal("22.00"), "IT"),
+    (Decimal("10.00"), "JP"),
+    (Decimal("12.00"), "PH"),
+    (Decimal("17.00"), "BR"),
+    (Decimal("20.00"), "FR"),
+    (Decimal("15.00"), "GH"),
+    (Decimal("10.00"), "AU"),
+    (Decimal("19.00"), "DE"),
+    (Decimal("18.00"), "IN"),
 )
 # Database columns use timezone-naive datetimes throughout the existing model.
 SEED_START_DATE = datetime(2025, 1, 15, 8, 30)  # noqa: DTZ001
@@ -242,16 +278,62 @@ SEED_USAGE_RECORDS = tuple(
 )
 
 
+def build_stripe_seed_record(number: int, seed: SeedRecord) -> StripeSeedRecord:
+    """Build one Stripe notification linked to a deterministic seeded user."""
+    state = STRIPE_STATES[(number - 1) % len(STRIPE_STATES)]
+    taxrate, taxcountry = TAX_PROFILES[(number - 1) % len(TAX_PROFILES)]
+    amount_net = (Decimal("9.99") + Decimal(number)).quantize(Decimal("0.01"))
+
+    if number % 5 == 0:
+        taxrate = None
+        taxcountry = None
+        amount_tax = Decimal("0.00")
+    else:
+        amount_tax = (amount_net * taxrate / Decimal("100")).quantize(Decimal("0.01"))
+
+    amount_gross = amount_net + amount_tax
+    amount_credit = amount_net if state in {"paid", "credited"} else None
+
+    return StripeSeedRecord(
+        email=seed.email,
+        eventid=f"evt_seed_{number:04d}",
+        invoiceid=f"in_seed_{number:04d}",
+        customerid=seed.stripeid or f"cus_seed_{number:04d}",
+        taxrate=taxrate,
+        taxcountry=taxcountry,
+        amount_net=amount_net,
+        amount_tax=amount_tax,
+        amount_gross=amount_gross,
+        currency=seed.currency.lower(),
+        sku=STRIPE_SKUS[(number - 1) % len(STRIPE_SKUS)],
+        state=state,
+        createdate=(seed.createdate or SEED_START_DATE) + timedelta(days=1),
+        imsi=seed.imsi,
+        amount_credit=amount_credit,
+    )
+
+
+SEED_STRIPE_RECORDS = tuple(
+    build_stripe_seed_record(number, seed)
+    for number, seed in enumerate(SEED_RECORDS, start=1)
+)
+
+
 def seed_database(session: Session, records: Sequence[SeedRecord]) -> SeedResult:
     """Insert missing seed records in one transaction and leave existing data unchanged."""
     emails = [record.email for record in records]
     imsis = [record.imsi for record in records]
     requested_usage = [record for record in SEED_USAGE_RECORDS if record.imsi in imsis]
     session_ids = [record.session_id for record in requested_usage]
+    requested_stripe_notifications = [
+        record for record in SEED_STRIPE_RECORDS if record.email in emails
+    ]
+    stripe_event_ids = [record.eventid for record in requested_stripe_notifications]
 
     created_users = 0
     created_esims = 0
     created_usage = 0
+    created_stripe_notifications = 0
 
     with session.begin():
         account = session.scalar(select(Account).where(Account.name == "Seed account"))
@@ -268,6 +350,13 @@ def seed_database(session: Session, records: Sequence[SeedRecord]) -> SeedResult
         }
         existing_usage_session_ids = set(
             session.scalars(select(Usage.session_id).where(Usage.session_id.in_(session_ids)))
+        )
+        existing_stripe_event_ids = set(
+            session.scalars(
+                select(StripeNotification.eventid).where(
+                    StripeNotification.eventid.in_(stripe_event_ids)
+                )
+            )
         )
 
         for record in records:
@@ -331,6 +420,16 @@ def seed_database(session: Session, records: Sequence[SeedRecord]) -> SeedResult
             existing_usage_session_ids.add(record.session_id)
             created_usage += 1
 
+        for record in requested_stripe_notifications:
+            if record.eventid in existing_stripe_event_ids:
+                continue
+
+            values = asdict(record)
+            email = values.pop("email")
+            session.add(StripeNotification(userid=users_by_email[email].id, **values))
+            existing_stripe_event_ids.add(record.eventid)
+            created_stripe_notifications += 1
+
     return SeedResult(
         created_users=created_users,
         existing_users=len(records) - created_users,
@@ -338,6 +437,10 @@ def seed_database(session: Session, records: Sequence[SeedRecord]) -> SeedResult
         existing_esims=len(records) - created_esims,
         created_usage=created_usage,
         existing_usage=len(requested_usage) - created_usage,
+        created_stripe_notifications=created_stripe_notifications,
+        existing_stripe_notifications=(
+            len(requested_stripe_notifications) - created_stripe_notifications
+        ),
     )
 
 
@@ -363,7 +466,10 @@ def main() -> None:
         "Seed complete: "
         f"users {result.created_users} created/{result.existing_users} existing; "
         f"eSIMs {result.created_esims} created/{result.existing_esims} existing; "
-        f"usage {result.created_usage} created/{result.existing_usage} existing."
+        f"usage {result.created_usage} created/{result.existing_usage} existing; "
+        "Stripe notifications "
+        f"{result.created_stripe_notifications} created/"
+        f"{result.existing_stripe_notifications} existing."
     )
 
 
