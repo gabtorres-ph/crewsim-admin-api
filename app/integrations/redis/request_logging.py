@@ -1,12 +1,15 @@
-"""Redis lifecycle and safe body capture for request logging."""
+"""Redis lifecycle, safe body capture, and persistence for request logging."""
 
 import asyncio
 import gzip
 import json
 import logging
 import re
+import time
 import zlib
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any, ClassVar
 from urllib.parse import parse_qs
 
@@ -222,9 +225,166 @@ class RequestLogManager:
                 logger.warning("Request logging Redis cleanup failed: %s", error)
 
     @classmethod
+    def schedule_log(cls, **log_data: Any) -> None:
+        """Retain background writes until completion without waiting on Redis."""
+        if not cls.is_enabled():
+            return
+        task = asyncio.create_task(cls.log_request(**log_data), name="request-log-write")
+        cls._write_tasks.add(task)
+        task.add_done_callback(cls._write_tasks.discard)
+
+    @classmethod
+    async def log_request(
+        cls,
+        *,
+        request_id: str,
+        ts_ms: int,
+        caller_ip: str,
+        user_id: str,
+        method: str,
+        path: str,
+        status: int,
+        duration_ms: float,
+        body_snapshot: RequestBodySnapshot | None = None,
+        response_body_snapshot: RequestBodySnapshot | None = None,
+    ) -> None:
+        """Persist a request and refresh every touched key's retention period."""
+        client = cls._client
+        if client is None:
+            return
+        try:
+            await cls.purge_expired_logs()
+            request_body = body_snapshot or RequestBodySnapshot("", 0, b"", False, False)
+            response_body = response_body_snapshot or RequestBodySnapshot("", 0, b"", False, False)
+            request_key = f"req:{request_id}"
+            body_key = f"{request_key}:body"
+            response_key = f"{request_key}:response_body"
+            user_key = f"user:{user_id}:reqs"
+            metrics_key = f"req:metrics:{method}:{path}"
+            metadata = {
+                "ts": str(ts_ms),
+                "timestamp": datetime.fromtimestamp(ts_ms / 1000, tz=UTC).isoformat(),
+                "caller_ip": caller_ip,
+                "user_id": user_id,
+                "method": method,
+                "path": path,
+                "status": str(status),
+                "duration_ms": str(int(duration_ms)),
+                "req_body_key": body_key,
+                "req_body_len": str(request_body.raw_length),
+                "req_body_truncated": str(int(request_body.truncated)),
+                "req_body_gzip": str(int(request_body.gzip)),
+                "content_type": request_body.content_type,
+                "resp_body_key": response_key,
+                "resp_body_len": str(response_body.raw_length),
+                "resp_body_truncated": str(int(response_body.truncated)),
+                "resp_body_gzip": str(int(response_body.gzip)),
+                "resp_content_type": response_body.content_type,
+            }
+            async with client.pipeline(transaction=True) as pipeline:
+                pipeline.hset(request_key, mapping=metadata)
+                pipeline.expire(request_key, REQUEST_LOG_TTL_SECONDS)
+                pipeline.set(body_key, request_body.stored_body)
+                pipeline.expire(body_key, REQUEST_LOG_TTL_SECONDS)
+                pipeline.set(response_key, response_body.stored_body)
+                pipeline.expire(response_key, REQUEST_LOG_TTL_SECONDS)
+                pipeline.zadd(user_key, {request_id: ts_ms})
+                pipeline.expire(user_key, REQUEST_LOG_TTL_SECONDS)
+                pipeline.zadd("req:all", {request_id: ts_ms})
+                pipeline.expire("req:all", REQUEST_LOG_TTL_SECONDS)
+                pipeline.hincrby(metrics_key, "count", 1)
+                pipeline.hincrbyfloat(metrics_key, "total_duration_ms", duration_ms)
+                pipeline.expire(metrics_key, REQUEST_LOG_TTL_SECONDS)
+                results = await pipeline.execute()
+            count, total_duration = int(results[10]), float(results[11])
+            async with client.pipeline(transaction=True) as pipeline:
+                pipeline.hset(metrics_key, "avg_duration_ms", total_duration / count)
+                pipeline.expire(metrics_key, REQUEST_LOG_TTL_SECONDS)
+                await pipeline.execute()
+        except (RedisError, ValueError, TypeError, OverflowError, OSError) as error:
+            logger.warning("Request logging Redis write failed: %s", error)
+
+    @classmethod
     async def purge_expired_logs(cls, now_ms: int | None = None, *, force: bool = False) -> int:
-        """Lifecycle hook; expiry and index repair are implemented in plan step 5."""
-        return 0
+        """Remove expired index members and their data, throttled across callers."""
+        if not cls.is_enabled():
+            return 0
+        if not force and time.monotonic() - cls._last_purge_monotonic < (
+            REQUEST_LOG_PURGE_INTERVAL_SECONDS
+        ):
+            return 0
+        if cls._purge_lock is None:
+            cls._purge_lock = asyncio.Lock()
+        async with cls._purge_lock:
+            client = cls._client
+            if client is None:
+                return 0
+            if not force and time.monotonic() - cls._last_purge_monotonic < (
+                REQUEST_LOG_PURGE_INTERVAL_SECONDS
+            ):
+                return 0
+            cutoff = (int(time.time() * 1000) if now_ms is None else now_ms) - (
+                REQUEST_LOG_TTL_SECONDS * 1000
+            )
+            expired_ids: set[str] = set()
+
+            async def prune_index(key: str | bytes) -> None:
+                while True:
+                    batch = await client.zrangebyscore(
+                        key, "-inf", cutoff, start=0, num=REQUEST_LOG_PURGE_BATCH_SIZE
+                    )
+                    if not batch:
+                        return
+                    expired_ids.update(request_id.decode("utf-8") for request_id in batch)
+                    # Remove only this batch so subsequent reads can continue from offset zero.
+                    await client.zrem(key, *batch)
+
+            try:
+                await prune_index("req:all")
+                async for key in cls._scan_user_index_keys():
+                    await prune_index(key)
+                await cls._delete_request_data(tuple(expired_ids))
+                cls._last_purge_monotonic = time.monotonic()
+                return len(expired_ids)
+            except RedisError as error:
+                logger.warning("Request logging Redis purge failed: %s", error)
+                return 0
+
+    @classmethod
+    async def _delete_request_data(cls, request_ids: Sequence[str]) -> None:
+        """Repair all indexes even when expired metadata no longer identifies the owner."""
+        client = cls._client
+        if client is None or not request_ids:
+            return
+        request_ids = tuple(dict.fromkeys(request_ids))
+        try:
+            for offset in range(0, len(request_ids), REQUEST_LOG_PURGE_BATCH_SIZE):
+                batch = request_ids[offset:offset + REQUEST_LOG_PURGE_BATCH_SIZE]
+                async with client.pipeline(transaction=True) as pipeline:
+                    pipeline.zrem("req:all", *batch)
+                    pipeline.delete(*(
+                        key
+                        for request_id in batch
+                        for key in (
+                            f"req:{request_id}", f"req:{request_id}:body",
+                            f"req:{request_id}:response_body",
+                        )
+                    ))
+                    await pipeline.execute()
+            async for key in cls._scan_user_index_keys():
+                for offset in range(0, len(request_ids), REQUEST_LOG_PURGE_BATCH_SIZE):
+                    await client.zrem(key, *request_ids[offset:offset + REQUEST_LOG_PURGE_BATCH_SIZE])
+        except RedisError as error:
+            logger.warning("Request logging Redis deletion failed: %s", error)
+
+    @classmethod
+    async def _scan_user_index_keys(cls) -> AsyncIterator[bytes]:
+        """Incrementally discover per-user indexes without blocking Redis with KEYS."""
+        client = cls._client
+        if client is None:
+            return
+        async for key in client.scan_iter(match="user:*:reqs", count=REQUEST_LOG_PURGE_BATCH_SIZE):
+            yield key
 
     @classmethod
     async def close(cls) -> None:
