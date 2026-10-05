@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     app_debug: bool = True
     api_prefix: str = "/api"
     cors_origins: str = Field(default="", alias="CORS_ORIGINS")
+    redis_host: str = Field(default="", alias="REDIS_HOST")
+    redis_port: int = Field(default=6379, alias="REDIS_PORT", ge=1, le=65535)
+    redis_username: str = Field(default="", alias="REDIS_USERNAME")
+    redis_password: str = Field(default="", alias="REDIS_PASSWORD")
     database_url: str = Field(default="", alias="DATABASE_URL")
     db_host: str = Field(default="localhost", alias="DB_HOST")
     db_port: int = Field(default=5432, alias="DB_PORT", ge=1, le=65535)

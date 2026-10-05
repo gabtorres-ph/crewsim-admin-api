@@ -9,9 +9,10 @@ x-app-environment: &app-environment
   DB_DATABASE: "${DB_DATABASE:-${POSTGRES_DB:-core_crewsim}}"
   DB_USERNAME: "${DB_USERNAME:-${POSTGRES_USER:-postgres}}"
   DB_PASSWORD: "${DB_PASSWORD:-${POSTGRES_PASSWORD:-postgres}}"
-  REDIS_HOST: "${REDIS_HOST:-redis}"
+  REDIS_HOST: "${REDIS_HOST-redis}"
   REDIS_PORT: "${REDIS_PORT:-6379}"
-  REDIS_DB: "${REDIS_DB:-0}"
+  REDIS_USERNAME: "${REDIS_USERNAME:-}"
+  REDIS_PASSWORD: "${REDIS_PASSWORD:-}"
 
 x-app-service: &app-service
   image: core-crewsim:local
@@ -40,8 +41,12 @@ services:
 
   redis:
     image: redis:8-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
+    environment:
+      REDISCLI_AUTH: "${REDIS_PASSWORD:?Set REDIS_PASSWORD for local Redis authentication}"
     command:
       - redis-server
+      - --requirepass
+      - "${REDIS_PASSWORD:?Set REDIS_PASSWORD for local Redis authentication}"
       - --save
       - ""
       - --appendonly
@@ -51,7 +56,7 @@ services:
       - --maxmemory-policy
       - allkeys-lru
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", 'test "$$(redis-cli ping)" = "PONG"']
       interval: 5s
       timeout: 5s
       retries: 10
