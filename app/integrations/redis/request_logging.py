@@ -7,7 +7,7 @@ import logging
 import re
 import time
 import zlib
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, ClassVar
@@ -385,6 +385,383 @@ class RequestLogManager:
             return
         async for key in client.scan_iter(match="user:*:reqs", count=REQUEST_LOG_PURGE_BATCH_SIZE):
             yield key
+
+    @classmethod
+    async def _read_index(
+        cls,
+        key: str,
+        *,
+        start: int = 0,
+        end: int = -1,
+        start_ts: int | None = None,
+        end_ts: int | None = None,
+        count: int | None = None,
+        by_ts: bool = False,
+        count_only: bool = False,
+    ) -> Any:
+        """Centralize index reads, retention cleanup, and failure handling."""
+        if not cls.is_enabled():
+            return 0 if count_only else []
+        try:
+            await cls.purge_expired_logs()
+            client = cls._client
+            if client is None:
+                return 0 if count_only else []
+            minimum = "-inf" if start_ts is None else start_ts
+            maximum = "+inf" if end_ts is None else end_ts
+            if count_only:
+                return int(
+                    await client.zcount(key, minimum, maximum) if by_ts else await client.zcard(key)
+                )
+            if by_ts:
+                if count is not None and count <= 0:
+                    return []
+                return await client.zrevrangebyscore(key, maximum, minimum, start=start, num=count)
+            return await client.zrevrange(key, start, end)
+        except RedisError as error:
+            logger.warning("Request logging Redis index read failed: %s", error)
+            return 0 if count_only else []
+
+    @classmethod
+    def _decode_entry(
+        cls,
+        request_id: str,
+        metadata: Mapping[bytes, bytes],
+        request_body: bytes | None,
+        response_body: bytes | None,
+    ) -> dict[str, Any]:
+        """Expose decoded metadata and optional sanitized bodies through one path."""
+        entry: dict[str, Any] = {
+            key.decode("utf-8", errors="replace"): value.decode("utf-8", errors="replace")
+            for key, value in metadata.items()
+        }
+        entry["request_id"] = request_id
+        for field in ("ts", "status", "duration_ms", "req_body_len", "resp_body_len"):
+            if field in entry:
+                entry[field] = int(entry[field])
+        for field in (
+            "req_body_truncated",
+            "req_body_gzip",
+            "resp_body_truncated",
+            "resp_body_gzip",
+        ):
+            if field in entry:
+                entry[field] = entry[field].lower() in {"1", "true", "yes", "y"}
+        if not entry.get("timestamp") and "ts" in entry:
+            entry["timestamp"] = datetime.fromtimestamp(entry["ts"] / 1000, tz=UTC).isoformat()
+        if request_body is not None:
+            entry["body"] = cls._decode_stored_body(
+                request_body, gzip_encoded=entry.get("req_body_gzip", False)
+            )
+        if response_body is not None:
+            entry["response_body"] = cls._decode_stored_body(
+                response_body, gzip_encoded=entry.get("resp_body_gzip", False)
+            )
+        return entry
+
+    @classmethod
+    async def _build_entries(
+        cls, request_ids: Sequence[str | bytes], *, include_body: bool
+    ) -> list[dict[str, Any]]:
+        if not cls.is_enabled() or not request_ids:
+            return []
+        ids = [item.decode("utf-8") if isinstance(item, bytes) else item for item in request_ids]
+        client = cls._client
+        if client is None:
+            return []
+        try:
+            async with client.pipeline(transaction=False) as pipeline:
+                for request_id in ids:
+                    pipeline.hgetall(f"req:{request_id}")
+                if include_body:
+                    for request_id in ids:
+                        pipeline.get(f"req:{request_id}:body")
+                    for request_id in ids:
+                        pipeline.get(f"req:{request_id}:response_body")
+                results = await pipeline.execute()
+            entries = []
+            missing = []
+            size = len(ids)
+            for index, request_id in enumerate(ids):
+                if not results[index]:
+                    missing.append(request_id)
+                    continue
+                entries.append(
+                    cls._decode_entry(
+                        request_id,
+                        results[index],
+                        results[size + index] if include_body else None,
+                        results[2 * size + index] if include_body else None,
+                    )
+                )
+            await cls._delete_request_data(missing)
+            return entries
+        except (RedisError, ValueError, TypeError, OverflowError, OSError) as error:
+            logger.warning("Request logging Redis entry read failed: %s", error)
+            return []
+
+    @classmethod
+    async def get_request_by_id(
+        cls, request_id: str, *, include_body: bool = True
+    ) -> dict[str, Any] | None:
+        entries = await cls._build_entries([request_id], include_body=include_body)
+        return entries[0] if entries else None
+
+    @classmethod
+    async def get_request_ids_for_all(cls, start: int = 0, end: int = -1) -> list[bytes]:
+        return await cls._read_index("req:all", start=start, end=end)
+
+    @classmethod
+    async def get_request_count_for_all(cls) -> int:
+        return await cls._read_index("req:all", count_only=True)
+
+    @classmethod
+    async def get_requests_for_all(
+        cls, start: int = 0, end: int = -1, *, include_body: bool = False
+    ) -> list[dict[str, Any]]:
+        ids = await cls.get_request_ids_for_all(start, end)
+        return await cls._build_entries(ids, include_body=include_body)
+
+    @classmethod
+    async def get_request_ids_for_all_by_ts_range(
+        cls, start_ts: int | None, end_ts: int | None, start: int = 0, count: int = 100
+    ) -> list[bytes]:
+        return await cls._read_index(
+            "req:all", start_ts=start_ts, end_ts=end_ts, start=start, count=count, by_ts=True
+        )
+
+    @classmethod
+    async def get_request_count_for_all_by_ts_range(
+        cls, start_ts: int | None, end_ts: int | None
+    ) -> int:
+        return await cls._read_index(
+            "req:all", count_only=True, start_ts=start_ts, end_ts=end_ts, by_ts=True
+        )
+
+    @classmethod
+    async def get_requests_for_all_by_ts_range(
+        cls,
+        start_ts: int | None,
+        end_ts: int | None,
+        start: int = 0,
+        count: int = 100,
+        *,
+        include_body: bool = False,
+    ) -> list[dict[str, Any]]:
+        ids = await cls.get_request_ids_for_all_by_ts_range(start_ts, end_ts, start, count)
+        return await cls._build_entries(ids, include_body=include_body)
+
+    @classmethod
+    async def get_request_ids_for_user(
+        cls, user_id: str, start: int = 0, end: int = -1
+    ) -> list[bytes]:
+        return await cls._read_index(f"user:{user_id}:reqs", start=start, end=end)
+
+    @classmethod
+    async def get_request_count_for_user(cls, user_id: str) -> int:
+        return await cls._read_index(f"user:{user_id}:reqs", count_only=True)
+
+    @classmethod
+    async def get_requests_for_user(
+        cls, user_id: str, start: int = 0, end: int = -1, *, include_body: bool = False
+    ) -> list[dict[str, Any]]:
+        ids = await cls.get_request_ids_for_user(user_id, start, end)
+        return await cls._build_entries(ids, include_body=include_body)
+
+    @classmethod
+    async def get_request_ids_for_user_by_ts_range(
+        cls,
+        user_id: str,
+        start_ts: int | None,
+        end_ts: int | None,
+        start: int = 0,
+        count: int = 100,
+    ) -> list[bytes]:
+        return await cls._read_index(
+            f"user:{user_id}:reqs",
+            start_ts=start_ts,
+            end_ts=end_ts,
+            start=start,
+            count=count,
+            by_ts=True,
+        )
+
+    @classmethod
+    async def get_request_count_for_user_by_ts_range(
+        cls, user_id: str, start_ts: int | None, end_ts: int | None
+    ) -> int:
+        return await cls._read_index(
+            f"user:{user_id}:reqs", count_only=True, start_ts=start_ts, end_ts=end_ts, by_ts=True
+        )
+
+    @classmethod
+    async def get_requests_for_user_by_ts_range(
+        cls,
+        user_id: str,
+        start_ts: int | None,
+        end_ts: int | None,
+        start: int = 0,
+        count: int = 100,
+        *,
+        include_body: bool = False,
+    ) -> list[dict[str, Any]]:
+        ids = await cls.get_request_ids_for_user_by_ts_range(
+            user_id, start_ts, end_ts, start, count
+        )
+        return await cls._build_entries(ids, include_body=include_body)
+
+    @classmethod
+    async def _scan_entries(
+        cls,
+        user_id: str | None,
+        start_ts: int | None,
+        end_ts: int | None,
+        *,
+        batch_size: int,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Scan metadata without loading bodies or skipping members after orphan repair."""
+        if not cls.is_enabled():
+            return
+        if batch_size <= 0:
+            raise ValueError("batch_size must be positive")
+        await cls.purge_expired_logs()
+        client = cls._client
+        if client is None:
+            return
+        key = "req:all" if user_id is None else f"user:{user_id}:reqs"
+        offset = 0
+        while True:
+            ids = await client.zrevrangebyscore(
+                key,
+                "+inf" if end_ts is None else end_ts,
+                "-inf" if start_ts is None else start_ts,
+                start=offset,
+                num=batch_size,
+            )
+            if not ids:
+                return
+            async with client.pipeline(transaction=False) as pipeline:
+                for request_id in ids:
+                    pipeline.hgetall(f"req:{request_id.decode('utf-8')}")
+                metadata = await pipeline.execute()
+            missing = []
+            for request_id, fields in zip(ids, metadata, strict=True):
+                decoded_id = request_id.decode("utf-8")
+                if fields:
+                    yield cls._decode_entry(decoded_id, fields, None, None)
+                else:
+                    missing.append(decoded_id)
+            if missing:
+                await client.zrem(key, *missing)
+            await cls._delete_request_data(missing)
+            # Orphan removal shifts the remaining members toward the beginning.
+            offset += len(ids) - len(missing)
+            if len(ids) < batch_size:
+                return
+
+    @classmethod
+    async def get_requests_matching_path(
+        cls,
+        user_id: str | None = None,
+        path_query: str = "",
+        start_ts: int | None = None,
+        end_ts: int | None = None,
+        start: int = 0,
+        count: int = 100,
+        include_body: bool = False,
+        batch_size: int = REQUEST_LOG_PURGE_BATCH_SIZE,
+    ) -> tuple[int, list[dict[str, Any]]]:
+        total = 0
+        entries = []
+        query = path_query.lower()
+        try:
+            async for entry in cls._scan_entries(user_id, start_ts, end_ts, batch_size=batch_size):
+                if query not in entry.get("path", "").lower():
+                    continue
+                if start <= total < start + count:
+                    entries.append(entry)
+                total += 1
+            if include_body:
+                entries = await cls._build_entries(
+                    [entry["request_id"] for entry in entries], include_body=True
+                )
+            return total, entries
+        except (RedisError, ValueError, TypeError, OverflowError, OSError) as error:
+            logger.warning("Request logging Redis path search failed: %s", error)
+            return 0, []
+
+    @classmethod
+    async def get_request_log_metrics(
+        cls,
+        user_id: str | None = None,
+        path_query: str | None = None,
+        start_ts: int | None = None,
+        end_ts: int | None = None,
+        batch_size: int = REQUEST_LOG_PURGE_BATCH_SIZE,
+    ) -> dict[str, Any]:
+        neutral: dict[str, Any] = {
+            "total_calls": 0,
+            "average_response_time_ms": 0.0,
+            "status_codes": {},
+            "endpoints": [],
+            "endpoint_groups": [],
+        }
+        total = 0
+        duration_sum = 0
+        statuses: dict[str, int] = {}
+        endpoints: dict[tuple[str, str], list[int]] = {}
+        groups: dict[str, list[int]] = {}
+        query = (path_query or "").lower()
+        try:
+            async for entry in cls._scan_entries(user_id, start_ts, end_ts, batch_size=batch_size):
+                path = entry.get("path", "")
+                if query not in path.lower():
+                    continue
+                duration = entry.get("duration_ms", 0)
+                total += 1
+                duration_sum += duration
+                status = str(entry.get("status") or "unknown")
+                statuses[status] = statuses.get(status, 0) + 1
+                endpoint = (entry.get("method", ""), path)
+                values = endpoints.setdefault(endpoint, [0, 0])
+                values[0] += 1
+                values[1] += duration
+                segments = path.strip("/").split("/")
+                if segments[0] == "api":
+                    segments = segments[1:]
+                group = (segments[0] if segments else "") or "root"
+                values = groups.setdefault(group, [0, 0])
+                values[0] += 1
+                values[1] += duration
+            return {
+                "total_calls": total,
+                "average_response_time_ms": duration_sum / total if total else 0.0,
+                "status_codes": statuses,
+                "endpoints": sorted(
+                    [
+                        {
+                            "method": method,
+                            "path": path,
+                            "count": calls,
+                            "avg_duration_ms": duration / calls,
+                        }
+                        for (method, path), (calls, duration) in endpoints.items()
+                    ],
+                    key=lambda item: item["count"],
+                    reverse=True,
+                ),
+                "endpoint_groups": sorted(
+                    [
+                        {"group": group, "count": calls, "avg_duration_ms": duration / calls}
+                        for group, (calls, duration) in groups.items()
+                    ],
+                    key=lambda item: item["count"],
+                    reverse=True,
+                ),
+            }
+        except (RedisError, ValueError, TypeError, OverflowError, OSError) as error:
+            logger.warning("Request logging Redis metrics read failed: %s", error)
+            return neutral
 
     @classmethod
     async def close(cls) -> None:
