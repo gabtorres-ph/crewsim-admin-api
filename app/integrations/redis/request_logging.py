@@ -24,7 +24,12 @@ REQUEST_LOG_PURGE_INTERVAL_SECONDS = 60
 REQUEST_LOG_PURGE_BATCH_SIZE = 500
 REQUEST_LOG_SHUTDOWN_TIMEOUT_SECONDS = 5
 MAX_BODY_BYTES = 32 * 1024
+# Streamed bodies are buffered up to this size so redaction sees complete JSON.
+MAX_CAPTURE_BYTES = 256 * 1024
 COMPRESS_THRESHOLD_BYTES = 1024
+MAX_PATH_LENGTH = 256
+UNMATCHED_PATH = "__unmatched__"
+METRICS_METHODS = frozenset({"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"})
 REDACTED_VALUE = "[REDACTED]"
 SENSITIVE_KEY_PARTS = (
     "password", "passwd", "pwd", "token", "authorization", "cookie", "secret", "apikey"
@@ -92,15 +97,31 @@ class RequestLogManager:
             return [cls._redact_sensitive_values(item) for item in value]
         return value
 
+    @staticmethod
+    def _omitted_body(reason: str, content_type: str, length: int) -> bytes:
+        return json.dumps(
+            {
+                "omitted": True,
+                "reason": reason,
+                "content_type": content_type,
+                "content_length": length,
+            },
+            separators=(",", ":"),
+            ensure_ascii=True,
+        ).encode("utf-8")
+
     @classmethod
-    def _redact_body(cls, body: bytes, content_type: str) -> bytes:
+    def _redact_body(cls, body: bytes, content_type: str) -> bytes | None:
+        """Return the redacted body, or None when structured data cannot be redacted."""
+        if not body:
+            return b""
         base_type = cls._normalize_content_type(content_type)
         decoded = body.decode("utf-8", errors="replace")
         if "json" in base_type or decoded.lstrip().startswith(("{", "[")):
             try:
                 value = json.loads(decoded)
-            except ValueError:
-                return decoded.encode("utf-8")
+            except (ValueError, RecursionError):
+                return None
         elif base_type == "application/x-www-form-urlencoded":
             value = {
                 key: values[0] if len(values) == 1 else values
@@ -108,9 +129,12 @@ class RequestLogManager:
             }
         else:
             return decoded.encode("utf-8")
-        return json.dumps(
-            cls._redact_sensitive_values(value), separators=(",", ":"), ensure_ascii=True
-        ).encode("utf-8")
+        try:
+            return json.dumps(
+                cls._redact_sensitive_values(value), separators=(",", ":"), ensure_ascii=True
+            ).encode("utf-8")
+        except RecursionError:
+            return None
 
     @classmethod
     async def capture_body(cls, request: Request) -> RequestBodySnapshot:
@@ -128,21 +152,28 @@ class RequestLogManager:
     def capture_response_body(
         cls, body: bytes, content_type: str, *, raw_length: int | None = None
     ) -> RequestBodySnapshot:
-        """Sanitize before applying the storage cap and optional compression."""
+        """Sanitize before applying the storage cap and optional compression.
+
+        Bodies that cannot be redacted, including streams captured only in part, are
+        replaced by a placeholder so unredacted secrets never reach Redis.
+        """
         length = len(body) if raw_length is None else raw_length
-        if cls._is_omitted_content_type(content_type):
-            stored_body = json.dumps(
-                {
-                    "omitted": True,
-                    "reason": "binary_or_multipart",
-                    "content_type": content_type,
-                    "content_length": length,
-                },
-                separators=(",", ":"),
-                ensure_ascii=True,
-            ).encode("utf-8")
-        else:
-            stored_body = cls._redact_body(body, content_type)
+        try:
+            if cls._is_omitted_content_type(content_type):
+                stored_body = cls._omitted_body("binary_or_multipart", content_type, length)
+            elif length > len(body):
+                stored_body = cls._omitted_body("too_large", content_type, length)
+            else:
+                redacted = cls._redact_body(body, content_type)
+                stored_body = (
+                    redacted
+                    if redacted is not None
+                    else cls._omitted_body("unparseable_json", content_type, length)
+                )
+        except Exception:
+            # Logging must never fail the request it describes.
+            logger.warning("Request logging body capture failed", exc_info=True)
+            stored_body = cls._omitted_body("capture_failed", content_type, length)
         truncated = length > MAX_BODY_BYTES or len(stored_body) > MAX_BODY_BYTES
         stored_body = stored_body[:MAX_BODY_BYTES]
         gzip_encoded = len(stored_body) > COMPRESS_THRESHOLD_BYTES
@@ -243,12 +274,16 @@ class RequestLogManager:
         user_id: str,
         method: str,
         path: str,
+        metrics_path: str,
         status: int,
         duration_ms: float,
         body_snapshot: RequestBodySnapshot | None = None,
         response_body_snapshot: RequestBodySnapshot | None = None,
     ) -> None:
-        """Persist a request and refresh every touched key's retention period."""
+        """Persist a request and refresh every touched key's retention period.
+
+        `metrics_path` must come from a bounded set (route templates) because it names a key.
+        """
         client = cls._client
         if client is None:
             return
@@ -260,7 +295,8 @@ class RequestLogManager:
             body_key = f"{request_key}:body"
             response_key = f"{request_key}:response_body"
             user_key = f"user:{user_id}:reqs"
-            metrics_key = f"req:metrics:{method}:{path}"
+            metrics_method = method if method in METRICS_METHODS else "OTHER"
+            metrics_key = f"req:metrics:{metrics_method}:{metrics_path}"
             metadata = {
                 "ts": str(ts_ms),
                 "timestamp": datetime.fromtimestamp(ts_ms / 1000, tz=UTC).isoformat(),
@@ -351,8 +387,14 @@ class RequestLogManager:
                 return 0
 
     @classmethod
-    async def _delete_request_data(cls, request_ids: Sequence[str]) -> None:
-        """Repair all indexes even when expired metadata no longer identifies the owner."""
+    async def _delete_request_data(
+        cls, request_ids: Sequence[str], *, index_key: str = "req:all"
+    ) -> None:
+        """Delete request data and drop the IDs from the global index and `index_key`.
+
+        Per-user indexes are not scanned here: the purge prunes all of them by score, and an
+        orphan left in another user's index is pruned once its timestamp passes the cutoff.
+        """
         client = cls._client
         if client is None or not request_ids:
             return
@@ -362,6 +404,8 @@ class RequestLogManager:
                 batch = request_ids[offset:offset + REQUEST_LOG_PURGE_BATCH_SIZE]
                 async with client.pipeline(transaction=True) as pipeline:
                     pipeline.zrem("req:all", *batch)
+                    if index_key != "req:all":
+                        pipeline.zrem(index_key, *batch)
                     pipeline.delete(*(
                         key
                         for request_id in batch
@@ -371,9 +415,6 @@ class RequestLogManager:
                         )
                     ))
                     await pipeline.execute()
-            async for key in cls._scan_user_index_keys():
-                for offset in range(0, len(request_ids), REQUEST_LOG_PURGE_BATCH_SIZE):
-                    await client.zrem(key, *request_ids[offset:offset + REQUEST_LOG_PURGE_BATCH_SIZE])
         except RedisError as error:
             logger.warning("Request logging Redis deletion failed: %s", error)
 
@@ -461,8 +502,13 @@ class RequestLogManager:
 
     @classmethod
     async def _build_entries(
-        cls, request_ids: Sequence[str | bytes], *, include_body: bool
+        cls,
+        request_ids: Sequence[str | bytes],
+        *,
+        include_body: bool,
+        index_key: str | None = None,
     ) -> list[dict[str, Any]]:
+        """Load entries; orphans are repaired only when the IDs came from `index_key`."""
         if not cls.is_enabled() or not request_ids:
             return []
         ids = [item.decode("utf-8") if isinstance(item, bytes) else item for item in request_ids]
@@ -494,7 +540,8 @@ class RequestLogManager:
                         results[2 * size + index] if include_body else None,
                     )
                 )
-            await cls._delete_request_data(missing)
+            if missing and index_key is not None:
+                await cls._delete_request_data(missing, index_key=index_key)
             return entries
         except (RedisError, ValueError, TypeError, OverflowError, OSError) as error:
             logger.warning("Request logging Redis entry read failed: %s", error)
@@ -520,7 +567,7 @@ class RequestLogManager:
         cls, start: int = 0, end: int = -1, *, include_body: bool = False
     ) -> list[dict[str, Any]]:
         ids = await cls.get_request_ids_for_all(start, end)
-        return await cls._build_entries(ids, include_body=include_body)
+        return await cls._build_entries(ids, include_body=include_body, index_key="req:all")
 
     @classmethod
     async def get_request_ids_for_all_by_ts_range(
@@ -549,7 +596,7 @@ class RequestLogManager:
         include_body: bool = False,
     ) -> list[dict[str, Any]]:
         ids = await cls.get_request_ids_for_all_by_ts_range(start_ts, end_ts, start, count)
-        return await cls._build_entries(ids, include_body=include_body)
+        return await cls._build_entries(ids, include_body=include_body, index_key="req:all")
 
     @classmethod
     async def get_request_ids_for_user(
@@ -566,7 +613,9 @@ class RequestLogManager:
         cls, user_id: str, start: int = 0, end: int = -1, *, include_body: bool = False
     ) -> list[dict[str, Any]]:
         ids = await cls.get_request_ids_for_user(user_id, start, end)
-        return await cls._build_entries(ids, include_body=include_body)
+        return await cls._build_entries(
+            ids, include_body=include_body, index_key=f"user:{user_id}:reqs"
+        )
 
     @classmethod
     async def get_request_ids_for_user_by_ts_range(
@@ -608,7 +657,9 @@ class RequestLogManager:
         ids = await cls.get_request_ids_for_user_by_ts_range(
             user_id, start_ts, end_ts, start, count
         )
-        return await cls._build_entries(ids, include_body=include_body)
+        return await cls._build_entries(
+            ids, include_body=include_body, index_key=f"user:{user_id}:reqs"
+        )
 
     @classmethod
     async def _scan_entries(
@@ -683,7 +734,9 @@ class RequestLogManager:
                 total += 1
             if include_body:
                 entries = await cls._build_entries(
-                    [entry["request_id"] for entry in entries], include_body=True
+                    [entry["request_id"] for entry in entries],
+                    include_body=True,
+                    index_key="req:all" if user_id is None else f"user:{user_id}:reqs",
                 )
             return total, entries
         except (RedisError, ValueError, TypeError, OverflowError, OSError) as error:

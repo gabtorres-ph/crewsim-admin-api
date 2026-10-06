@@ -12,17 +12,19 @@ from starlette.concurrency import iterate_in_threadpool
 from starlette.middleware.base import RequestResponseEndpoint
 
 from app.integrations.redis.request_logging import (
-    MAX_BODY_BYTES,
+    MAX_CAPTURE_BYTES,
+    MAX_PATH_LENGTH,
+    UNMATCHED_PATH,
     RequestBodySnapshot,
     RequestLogManager,
 )
 
 
-def _resolved_path(request: Request) -> str:
-    """Use the route matched during dispatch, or the unmodified URL path."""
+def _route_template(request: Request) -> str | None:
+    """Return the route matched during dispatch, or None when no route matched."""
     route_path = getattr(request.scope.get("route"), "path", None)
     if not route_path:
-        return request.url.path
+        return None
     return re.sub(r"\{([^{}:]+)(?::[^{}]+)?\}", r":\1", route_path)
 
 
@@ -40,13 +42,16 @@ def _schedule_log(
         return
 
     user_id = getattr(request.state, "user_id", None)
+    route_path = _route_template(request)
     RequestLogManager.schedule_log(
         request_id=request_id,
         ts_ms=ts_ms,
         caller_ip=request.client.host if request.client else "anonymous",
         user_id=str(user_id) if user_id else "anonymous",
         method=request.method,
-        path=_resolved_path(request),
+        # Unmatched URLs stay searchable in the entry but never name a metrics key.
+        path=route_path or request.url.path[:MAX_PATH_LENGTH],
+        metrics_path=route_path or UNMATCHED_PATH,
         status=status,
         duration_ms=(time.perf_counter() - started_at) * 1000,
         body_snapshot=body_snapshot,
@@ -79,7 +84,9 @@ async def _capture_stream(
         nonlocal total_length
         view = memoryview(body).cast("B")
         total_length += len(view)
-        remaining = MAX_BODY_BYTES - len(captured)
+        # Capture beyond the storage cap so redaction sees complete JSON; a longer
+        # stream is stored as a placeholder because it cannot be redacted.
+        remaining = MAX_CAPTURE_BYTES - len(captured)
         if not omit_body and remaining > 0:
             captured.extend(view[:remaining])
 
