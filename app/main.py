@@ -1,5 +1,9 @@
-from fastapi import FastAPI, Request, status
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import RequestResponseEndpoint
 
 from app.common.cors import add_cors_middleware
 from app.common.exceptions import (
@@ -8,14 +12,39 @@ from app.common.exceptions import (
     ResourceNotFoundError,
 )
 from app.config import get_settings
+from app.integrations.redis.request_logging import RequestLogManager
+from app.integrations.redis.request_logging_middleware import handle_request_logging
 from app.routes import api_router
 
 settings = get_settings()
 
-app = FastAPI(title=settings.app_name, debug=settings.app_debug)
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    RequestLogManager.init(
+        settings.redis_host,
+        settings.redis_port,
+        username=settings.redis_username,
+        password=settings.redis_password,
+    )
+    try:
+        await RequestLogManager.start_cleanup_task()
+        yield
+    finally:
+        await RequestLogManager.close()
+
+
+app = FastAPI(title=settings.app_name, debug=settings.app_debug, lifespan=lifespan)
 add_cors_middleware(app, settings.allowed_cors_origins)
 
 app.include_router(api_router, prefix=settings.api_prefix)
+
+
+@app.middleware("http")
+async def request_logging_middleware(
+    request: Request, call_next: RequestResponseEndpoint
+) -> Response:
+    return await handle_request_logging(request, call_next)
 
 
 @app.exception_handler(ResourceNotFoundError)
