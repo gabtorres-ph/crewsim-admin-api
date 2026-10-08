@@ -4,7 +4,7 @@ import codecs
 import re
 import time
 from collections.abc import AsyncIterable, AsyncIterator
-from typing import Any
+from typing import Any, Dict
 from uuid import uuid4
 
 from fastapi import Request, Response
@@ -28,6 +28,16 @@ def _route_template(request: Request) -> str | None:
     return re.sub(r"\{([^{}:]+)(?::[^{}]+)?\}", r":\1", route_path)
 
 
+def _fetch_client_ip(request: Request):
+    # this assumes that we can accurately capture the caller ip
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    client = request.client
+    if client and client.host:
+        return client.host
+
+
 def _schedule_log(
     request: Request,
     *,
@@ -46,7 +56,7 @@ def _schedule_log(
     RequestLogManager.schedule_log(
         request_id=request_id,
         ts_ms=ts_ms,
-        caller_ip=request.client.host if request.client else "anonymous",
+        caller_ip=_fetch_client_ip(request),
         user_id=str(user_id) if user_id else "anonymous",
         method=request.method,
         # Unmatched URLs stay searchable in the entry but never name a metrics key.
