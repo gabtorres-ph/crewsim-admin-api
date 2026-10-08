@@ -123,6 +123,9 @@ async def _capture_stream(
 
 async def handle_request_logging(request: Request, call_next: RequestResponseEndpoint) -> Response:
     """Assign a request ID and capture eligible request and response bodies."""
+    if request.url.path == "/health":
+        return await call_next(request)
+
     request_id = uuid4().hex
     request.state.request_id = request_id
     ts_ms = int(time.time() * 1000)

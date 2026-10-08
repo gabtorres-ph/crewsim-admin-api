@@ -17,7 +17,7 @@ Source files:
 
 ## 1. Overview
 
-- Every HTTP request passing through the app middleware is recorded: metadata (method, path, status, duration, caller IP, user id) plus a **redacted, truncated, optionally gzipped** copy of the request and response bodies.
+- Every HTTP request passing through the app middleware, except the `/health` probe, is recorded: metadata (method, path, status, duration, caller IP, user id) plus a **redacted, truncated, optionally gzipped** copy of the request and response bodies.
 - Records are stored in Redis with a **3-day TTL** and indexed by time in two sorted sets: a global index and a per-user index.
 - The Redis write happens in a **fire-and-forget background task** so logging never delays or breaks the response.
 - Admins can list, filter (user, path substring, time range), page, aggregate and inspect individual requests via HTTP endpoints.
@@ -80,17 +80,18 @@ response = await handle_request_logging(request, call_next, endpoint=endpoint, m
 
 `handle_request_logging` then:
 
-1. `normalized_path = normalize_path(endpoint)`: rewrites `{param}` to `:param`.
-2. Generates `request_id = uuid4().hex`, stores it on `request.state.request_id`, records `ts_ms = int(time.time() * 1000)`.
-3. If enabled, `body_snapshot = await capture_body(request)`. This reads `request.body()`, which Starlette caches so the handler can still read it.
-4. *(App-specific, optional)* `set_query_request_context(method, endpoint)` puts method/endpoint into a `ContextVar` so SQL query logging can attribute queries to the endpoint; it is reset in `finally`.
-5. Times `await call_next(request)` with `time.perf_counter()`.
+1. If `request.url.path == "/health"`, calls the handler immediately without creating or storing a request log. Query parameters do not affect this path comparison.
+2. `normalized_path = normalize_path(endpoint)`: rewrites `{param}` to `:param`.
+3. Generates `request_id = uuid4().hex`, stores it on `request.state.request_id`, records `ts_ms = int(time.time() * 1000)`.
+4. If enabled, `body_snapshot = await capture_body(request)`. This reads `request.body()`, which Starlette caches so the handler can still read it.
+5. *(App-specific, optional)* `set_query_request_context(method, endpoint)` puts method/endpoint into a `ContextVar` so SQL query logging can attribute queries to the endpoint; it is reset in `finally`.
+6. Times `await call_next(request)` with `time.perf_counter()`.
    - **On exception:** schedule a log with status `500` (no response body), then re-raise.
-6. Captures the response body:
+7. Captures the response body:
    - **Buffered response** (has non-empty `.body`): `capture_response_body(response.body, content_type)` and schedule the log immediately.
    - **Streaming response** (has `.body_iterator`): replace the iterator with a wrapper generator that yields every chunk unchanged while copying up to `MAX_CAPTURE_BYTES` and counting the total length. After the last chunk it calls `capture_response_body(captured, content_type, raw_length=total)` and schedules the log. Handles both async and sync iterators.
    - **Neither:** schedule the log without a response body.
-7. Returns the response.
+8. Returns the response.
 
 > **Note:** with `@app.middleware("http")` (Starlette's `BaseHTTPMiddleware`), `call_next` *always* returns a `_StreamingResponse` with a `body_iterator` and no `.body` (verified on Starlette 1.6.0). So in this app every response actually takes the streaming branch, and the buffered branch only matters if the logic is reused somewhere `call_next` returns real `Response` objects. In the port, either keep both branches or implement the capture as pure ASGI middleware that wraps `send` and collects `http.response.body` messages.
 
