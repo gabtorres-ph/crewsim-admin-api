@@ -18,6 +18,7 @@ from app.timezone.routes import router as timezone_router
 from app.usage.routes import router as usage_router
 from app.users.routes import router as users_router
 from app.utils.routes import router as utils_router
+from app.webhooks.routes import router as webhooks_router
 
 api_router = APIRouter()
 api_router.include_router(accounts_router)
@@ -38,5 +39,6 @@ api_router.include_router(usage_router)
 api_router.include_router(stripe_notifs_router)
 api_router.include_router(timezone_router)
 api_router.include_router(utils_router)
+api_router.include_router(webhooks_router)
 
 __all__ = ["api_router"]

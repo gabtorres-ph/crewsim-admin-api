@@ -114,5 +114,24 @@ configuration, seeding, or an architecture rule rather than to one domain.
 
 When an external service is introduced, place its adapter in `app/integrations/<provider>/` and
 keep provider-specific details out of domain modules. When a distinct API surface is introduced,
-place it in its own `app/<api_name>/` package and compose it explicitly. These are conventions for
-future capabilities; no integration or alternate API package exists today.
+place it in its own `app/<api_name>/` package and compose it explicitly.
+
+## Inbound webhooks
+
+Provider webhooks live in `app/webhooks/`, mounted at `/api/webhooks`, with one router module per
+provider (for example `app/webhooks/telcovision.py` serves `/api/webhooks/telcovision/{es2,location,package}`).
+Each request flows through three layers:
+
+```text
+webhooks/<provider>.py → integrations/<provider>/mapper.py → <domain>/manager.py
+        (HTTP)               (provider payload → domain schema)     (persistence)
+```
+
+- `app/integrations/<provider>/schemas.py` describes the provider's payloads. They allow unknown
+  fields so provider additions are stored rather than rejected.
+- `app/integrations/<provider>/mapper.py` turns a provider event into the domain's create schema
+  and stores the received body unchanged in the notification `payload`.
+- Domain packages such as `app/sim_notifications/` never import `app.integrations` or
+  `app.webhooks`; `app/test_architecture.py` enforces this.
+- Webhooks acknowledge with `200 {"status": "ok"}`. They are currently unauthenticated; request
+  verification belongs on the provider router as a dependency.

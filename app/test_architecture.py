@@ -59,6 +59,11 @@ DOMAIN_LAYER_MODULES = (
     "app.sim_notifications.resource_access",
     "app.sim_notifications.manager",
     "app.sim_notifications.routes",
+    "app.integrations.telcovision.schemas",
+    "app.integrations.telcovision.mapper",
+    "app.webhooks.schemas",
+    "app.webhooks.telcovision",
+    "app.webhooks.routes",
 )
 
 
@@ -102,3 +107,15 @@ def test_router_and_domain_models_are_registered() -> None:
 def test_stripe_domain_layers_are_importable() -> None:
     for module in DOMAIN_LAYER_MODULES:
         importlib.import_module(module)
+
+
+def test_sim_notifications_domain_does_not_import_providers_or_webhooks() -> None:
+    forbidden = ("app.integrations", "app.webhooks")
+    violations = [
+        f"{path.relative_to(APP_ROOT.parent)}: {module}"
+        for path in (APP_ROOT / "sim_notifications").glob("*.py")
+        for module in _imports(path)
+        if any(module == prefix or module.startswith(f"{prefix}.") for prefix in forbidden)
+    ]
+
+    assert violations == []
