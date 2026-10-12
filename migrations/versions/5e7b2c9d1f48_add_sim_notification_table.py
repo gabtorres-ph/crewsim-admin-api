@@ -22,7 +22,7 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     op.create_table(
         "sim_notification",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column("typ", sa.String(length=20), nullable=False),
         sa.Column("imsi", sa.String(length=15), nullable=False),
         sa.Column("provider", sa.String(length=20), nullable=False),
