@@ -261,6 +261,11 @@ uv run --active ruff check .
 uv build
 ```
 
+Tests run against PostgreSQL. Start the Compose database with `docker compose up -d db`; it is
+published on `127.0.0.1:${DB_HOST_PORT:-5433}`. The suite connects with `TEST_DATABASE_URL`,
+creates that database on first run, and rolls back each test's transaction. With
+`pytest -n <workers>`, each xdist worker uses its own `<database>_gw<N>` database.
+
 Tests live beside their owning modules under `app/`; shared fixtures live in `conftest.py`.
 Production package and Docker builds exclude the colocated test modules and `conftest.py`.
 

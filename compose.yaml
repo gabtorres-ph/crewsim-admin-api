@@ -27,6 +27,9 @@ services:
       POSTGRES_DB: "${DB_DATABASE:-${POSTGRES_DB:-core_crewsim}}"
       POSTGRES_USER: "${DB_USERNAME:-${POSTGRES_USER:-postgres}}"
       POSTGRES_PASSWORD: "${DB_PASSWORD:-${POSTGRES_PASSWORD:-postgres}}"
+    # Host access for local tools and pytest; 5433 avoids a host-installed PostgreSQL.
+    ports:
+      - "127.0.0.1:${DB_HOST_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql
     healthcheck:

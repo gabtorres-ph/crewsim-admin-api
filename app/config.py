@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     db_username: str = Field(default="postgres", alias="DB_USERNAME")
     db_password: str = Field(default="postgres", alias="DB_PASSWORD")
     test_database_url: str = Field(
-        default="postgresql+psycopg://postgres:postgres@localhost:5432/core_crewsim_test",
+        default="postgresql+psycopg://postgres:postgres@localhost:5433/core_crewsim_test",
         alias="TEST_DATABASE_URL",
     )
 
