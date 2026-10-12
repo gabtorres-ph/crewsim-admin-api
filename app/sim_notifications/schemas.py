@@ -3,7 +3,7 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.sim_notifications.models import SimNotificationType
+from app.sim_notifications.models import SimNotificationProvider, SimNotificationType
 
 Imsi = Annotated[str, Field(pattern=r"^\d{5,15}$")]
 
@@ -11,6 +11,7 @@ Imsi = Annotated[str, Field(pattern=r"^\d{5,15}$")]
 class SimNotificationBase(BaseModel):
     typ: SimNotificationType
     imsi: Imsi
+    provider: SimNotificationProvider
     payload: dict[str, Any]
 
     model_config = ConfigDict(str_strip_whitespace=True)
@@ -23,12 +24,13 @@ class SimNotificationCreate(SimNotificationBase):
 class SimNotificationUpdate(BaseModel):
     typ: SimNotificationType | None = None
     imsi: Imsi | None = None
+    provider: SimNotificationProvider | None = None
     payload: dict[str, Any] | None = None
     createdate: datetime | None = None
 
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    @field_validator("typ", "imsi", "payload", "createdate")
+    @field_validator("typ", "imsi", "provider", "payload", "createdate")
     @classmethod
     def reject_null(cls, value: Any) -> Any:
         if value is None:

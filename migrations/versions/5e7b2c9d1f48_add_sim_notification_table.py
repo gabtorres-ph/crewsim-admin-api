@@ -25,6 +25,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("typ", sa.String(length=20), nullable=False),
         sa.Column("imsi", sa.String(length=15), nullable=False),
+        sa.Column("provider", sa.String(length=20), nullable=False),
         sa.Column(
             "payload",
             sa.JSON().with_variant(postgresql.JSONB(), "postgresql"),

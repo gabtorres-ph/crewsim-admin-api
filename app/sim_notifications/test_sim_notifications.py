@@ -7,7 +7,11 @@ from sqlalchemy.orm import Session
 
 from app.common.exceptions import ResourceConflictError, ResourceNotFoundError
 from app.sim_notifications.manager import SimNotificationManager
-from app.sim_notifications.models import SimNotification, SimNotificationType
+from app.sim_notifications.models import (
+    SimNotification,
+    SimNotificationProvider,
+    SimNotificationType,
+)
 from app.sim_notifications.resource_access import SimNotificationResourceAccess
 from app.sim_notifications.schemas import SimNotificationCreate, SimNotificationUpdate
 
@@ -16,6 +20,7 @@ def sim_notification_values(**overrides):
     values = {
         "typ": SimNotificationType.LOCATION,
         "imsi": "260010180730303",
+        "provider": SimNotificationProvider.TELCOVISION,
         "payload": {"mcc": "260", "mnc": "01", "country": "PL"},
     }
     values.update(overrides)
@@ -98,18 +103,30 @@ def test_sim_notification_schemas_validate_payloads() -> None:
         SimNotificationCreate(**sim_notification_values(imsi="26001abc"))
 
     with pytest.raises(ValidationError):
+        SimNotificationCreate(**sim_notification_values(provider="unknown"))
+
+    with pytest.raises(ValidationError):
         SimNotificationUpdate(payload=None)
+
+    with pytest.raises(ValidationError):
+        SimNotificationUpdate(provider=None)
 
 
 @pytest.mark.asyncio
 async def test_sim_notification_routes(client: AsyncClient) -> None:
     response = await client.post(
         "/api/sim/notifications",
-        json={"typ": "ES2", "imsi": "260010180730303", "payload": {"event": "download"}},
+        json={
+            "typ": "ES2",
+            "imsi": "260010180730303",
+            "provider": "telcovision",
+            "payload": {"event": "download"},
+        },
     )
     assert response.status_code == 201
     created = response.json()
     assert created["typ"] == "ES2"
+    assert created["provider"] == "telcovision"
     assert created["createdate"]
 
     response = await client.get("/api/sim/notifications", params={"typ": "ES2"})

@@ -15,6 +15,10 @@ class SimNotificationType(StrEnum):
     PACKAGE = "package"
 
 
+class SimNotificationProvider(StrEnum):
+    TELCOVISION = "telcovision"
+
+
 class SimNotification(Base):
     __tablename__ = "sim_notification"
     __table_args__ = (
@@ -26,6 +30,7 @@ class SimNotification(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     typ: Mapped[str] = mapped_column(String(20), nullable=False)
     imsi: Mapped[str] = mapped_column(String(15), nullable=False)
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)
     payload: Mapped[dict[str, Any]] = mapped_column(
         JSON().with_variant(JSONB(), "postgresql"), nullable=False
     )
