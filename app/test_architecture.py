@@ -19,6 +19,7 @@ DOMAIN_MODEL_MODULES = (
     "app.favorites.models",
     "app.language.models",
     "app.packages.models",
+    "app.sim_notifications.models",
     "app.sms.models",
     "app.stripe.models",
     "app.timezone.models",
@@ -43,6 +44,7 @@ EXPECTED_TABLES = {
     "favorites",
     "languages",
     "packages",
+    "sim_notification",
     "sms",
     "stripenotification",
     "time_zone",
@@ -53,6 +55,10 @@ DOMAIN_LAYER_MODULES = (
     "app.stripe.resource_access",
     "app.stripe.manager",
     "app.stripe.routes",
+    "app.sim_notifications.schemas",
+    "app.sim_notifications.resource_access",
+    "app.sim_notifications.manager",
+    "app.sim_notifications.routes",
 )
 
 

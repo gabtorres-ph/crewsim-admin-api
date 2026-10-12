@@ -1,0 +1,1 @@
+"""SIM notification domain package."""
