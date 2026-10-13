@@ -73,7 +73,7 @@ class ESIMUpdate(BaseModel):
 class ESIMRead(BaseModel):
     id: int
     user_id: int | None = Field(validation_alias="userid")
-    account_id: int = Field(validation_alias="accountid")
+    account_id: int | None = Field(validation_alias="accountid")
     imsi: str
     name: str | None
     isesim: bool | None
