@@ -65,7 +65,7 @@ documented [here](https://github.com/telco-vision/ocs-api/blob/main/doc/v1/API.m
   in the synchronous FastAPI route, with a 10-second connect and 30-second read timeout, no
   automatic retry. Rejected embedding the token in a configured URL or exception text.
 - Security: Require a nonempty `ACCOUNTS_REFRESH_KEY` and compare it against the
-  `X-Accounts-Refresh-Key` request header with `secrets.compare_digest`. Return 503 when the key
+  `X-Accounts-Refresh-Key` request header with `secrets.compare_digest`. Return 503 when the key, provider URL, or provider token
   is unconfigured, 401 for a missing/invalid key, 409 for concurrent refresh, and 502 for
   Telcovision transport, HTTP, protocol, or provider-status failures. Response bodies and logs
   must never include the token, request URL, raw provider response, or refresh key. Keep the
@@ -75,7 +75,7 @@ documented [here](https://github.com/telco-vision/ocs-api/blob/main/doc/v1/API.m
   `{"fetched": int, "created": int, "updated": int, "unchanged": int, "deleted": int,
   "delinked_esims": int}` after commit. The route does not launch a background task; a caller
   can tell whether the refresh succeeded.
-- Assumptions: The supplied host and `/ocs-custo/main/v1` path are the correct endpoint for
+- Assumptions: The endpoint supplied through `TELCOVISION_API_URL` (host plus `/ocs-custo/main/v1` path) is the correct endpoint for
   `listResellerAccount`; the token grants access to every reseller this application should
   represent; account IDs are unique across those resellers and equal `accounts.id`; the
   documented response has no pagination. An empty, valid reseller list is a legitimate empty
@@ -149,11 +149,12 @@ documented [here](https://github.com/telco-vision/ocs-api/blob/main/doc/v1/API.m
 - **Goal:** Isolate Telcovision's shared request envelope and failure handling.
 - **Files:** `app/config.py`, `.env.example`, `app/integrations/telcovision/client.py`
 - **Instructions:**
-  - Add `TELCOVISION_API_URL` (default
-    `https://ocs-api.telco-vision.com:7443/ocs-custo/main/v1`), `TELCOVISION_API_TOKEN`
-    (default empty `SecretStr`), and `ACCOUNTS_REFRESH_KEY` (default empty `SecretStr`) to
-    `Settings`; document them without values in `.env.example`. A missing provider token makes
-    refresh return 503. Unwrap secret values only at the call sites that need them.
+  - Add `TELCOVISION_API_URL` (plain `str`, empty default; the real endpoint, e.g.
+    `https://ocs-api.telco-vision.com:7443/ocs-custo/main/v1`, must come from the environment and
+    never be hardcoded as a default), `TELCOVISION_API_TOKEN` (default empty `SecretStr`), and
+    `ACCOUNTS_REFRESH_KEY` (default empty `SecretStr`) to `Settings`; document them without
+    values in `.env.example`. A missing provider URL or token makes refresh return 503. Unwrap
+    secret values only at the call sites that need them.
   - Implement `TelcovisionClient.__init__(self, api_url: str, token: str,
     http_client: httpx.Client) -> None`, `_request(self, operation: str,
     payload: dict[str, object]) -> dict[str, object]`, and

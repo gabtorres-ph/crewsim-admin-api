@@ -1,7 +1,7 @@
 from functools import lru_cache
 from urllib.parse import quote
 
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,6 +25,9 @@ class Settings(BaseSettings):
         default="postgresql+psycopg://postgres:postgres@localhost:5433/core_crewsim_test",
         alias="TEST_DATABASE_URL",
     )
+    telcovision_api_url: str = Field(default="", alias="TELCOVISION_API_URL")
+    telcovision_api_token: SecretStr = Field(default=SecretStr(""), alias="TELCOVISION_API_TOKEN")
+    accounts_refresh_key: SecretStr = Field(default=SecretStr(""), alias="ACCOUNTS_REFRESH_KEY")
 
     model_config = SettingsConfigDict(
         env_file=".env",
