@@ -70,11 +70,11 @@ def test_esim_manager_validates_references_and_can_reassign(db_session: Session)
 
 
 @pytest.mark.asyncio
-async def test_esim_crud_filters_nested_listing_and_public_field_names(client) -> None:
+async def test_esim_crud_filters_nested_listing_and_public_field_names(
+    client, db_session: Session
+) -> None:
     user_id = (await client.post("/api/users", json=user_payload())).json()["id"]
-    account_id = (
-        await client.post("/api/accounts", json={"name": "Test account", "balance": 0})
-    ).json()["id"]
+    account_id = create_account(db_session).id
     create_response = await client.post(
         "/api/esims",
         json={"user_id": user_id, "account_id": account_id, "imsi": "001010000000001"},
@@ -100,10 +100,10 @@ async def test_esim_crud_filters_nested_listing_and_public_field_names(client) -
 
 
 @pytest.mark.asyncio
-async def test_esim_routes_reject_missing_user_and_account_independently(client) -> None:
-    account_id = (
-        await client.post("/api/accounts", json={"name": "Test account", "balance": 0})
-    ).json()["id"]
+async def test_esim_routes_reject_missing_user_and_account_independently(
+    client, db_session: Session
+) -> None:
+    account_id = create_account(db_session).id
 
     missing_user = await client.post(
         "/api/esims", json={"user_id": 999, "account_id": account_id, "imsi": "00101"}
