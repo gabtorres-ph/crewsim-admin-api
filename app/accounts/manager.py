@@ -1,22 +1,56 @@
+from collections.abc import Callable
+
 from sqlalchemy.orm import Session
 
 from app.accounts.models import Account
 from app.accounts.resource_access import AccountResourceAccess
-from app.accounts.schemas import AccountCreate, AccountUpdate
-from app.common.exceptions import ResourceNotFoundError
+from app.accounts.schemas import (
+    AccountCreate,
+    AccountRefreshResult,
+    AccountSnapshot,
+    AccountUpdate,
+)
+from app.common.exceptions import ResourceConflictError, ResourceNotFoundError
 from app.common.manager import TransactionalManager
+from app.esims.resource_access import ESIMResourceAccess
+
+TELCOVISION_MANAGED_MESSAGE = "Accounts are managed by Telcovision"
 
 
 class AccountManager(TransactionalManager):
     def __init__(self, session: Session) -> None:
         super().__init__(session)
         self.accounts = AccountResourceAccess(session)
+        self.esims = ESIMResourceAccess(session)
+
+    def refresh_accounts(
+        self, fetch_snapshot: Callable[[], list[AccountSnapshot]]
+    ) -> AccountRefreshResult:
+        """Make accounts match the fetched snapshot in one transaction."""
+
+        def operation() -> AccountRefreshResult:
+            if not self.accounts.try_acquire_refresh_lock():
+                raise ResourceConflictError("Account refresh is already running")
+            snapshot = fetch_snapshot()
+            created, updated, unchanged = self.accounts.upsert_snapshot(snapshot)
+            missing_ids = self.accounts.list_missing_ids({item.id for item in snapshot})
+            delinked = self.esims.delink_accounts(missing_ids)
+            deleted = self.accounts.delete_ids(missing_ids)
+            return AccountRefreshResult(
+                fetched=len(snapshot),
+                created=created,
+                updated=updated,
+                unchanged=unchanged,
+                deleted=deleted,
+                delinked_esims=delinked,
+            )
+
+        return self._write(
+            operation, conflict_message="The account refresh conflicts with existing database data"
+        )
 
     def create_account(self, data: AccountCreate) -> Account:
-        return self._write(
-            lambda: self.accounts.create(data.model_dump()),
-            conflict_message="The account conflicts with existing database data",
-        )
+        raise ResourceConflictError(TELCOVISION_MANAGED_MESSAGE)
 
     def get_account(self, account_id: int) -> Account:
         account = self.accounts.get(account_id)
@@ -28,15 +62,7 @@ class AccountManager(TransactionalManager):
         return self.accounts.list(offset=offset, limit=limit)
 
     def update_account(self, account_id: int, data: AccountUpdate) -> Account:
-        account = self.get_account(account_id)
-        return self._write(
-            lambda: self.accounts.update(account, data.model_dump(exclude_unset=True)),
-            conflict_message="The account update conflicts with existing database data",
-        )
+        raise ResourceConflictError(TELCOVISION_MANAGED_MESSAGE)
 
     def delete_account(self, account_id: int) -> None:
-        account = self.get_account(account_id)
-        self._write(
-            lambda: self.accounts.delete(account),
-            conflict_message="The account cannot be deleted while it is referenced by other data",
-        )
+        raise ResourceConflictError(TELCOVISION_MANAGED_MESSAGE)
