@@ -174,6 +174,8 @@ Present the plan and **stop**.
 
 - Carry out the steps in plan order, one at a time.
 - Use exactly the names, paths, and signatures from the plan.
+- After implementing each step, summarize the changes in a single sentence suitable for a git commit
+  message. Only provide the message; do not commit (see [Non-negotiable rules](#non-negotiable-rules)).
 - If reality diverges from the plan (a file is missing, a pattern conflicts, an assumption proves
   wrong), stop and report it. Do not improvise around it.
 - When the plan calls for a migration, write the migration file but **do not apply it**.
