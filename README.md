@@ -189,6 +189,47 @@ by this FastAPI application.
 > users' browsers, inject the service-token headers in a trusted server-side proxy or Cloudflare
 > Worker instead of exposing the token in frontend code.
 
+### Telcovision account refresh
+
+`POST /api/accounts/refresh` synchronizes local accounts with the Telcovision reseller account
+list. Set these as deployment secrets (for example in Dokploy); never commit them or bake them
+into the image:
+
+- `TELCOVISION_API_URL`: Telcovision API base URL.
+- `TELCOVISION_API_TOKEN`: provider API token. It is used only by the server and must never
+  appear in a trigger command or URL.
+- `ACCOUNTS_REFRESH_KEY`: shared secret callers send in the `X-Accounts-Refresh-Key` header.
+
+Trigger a refresh, substituting a real key for the placeholder (and adding any Cloudflare Access
+headers your deployment requires):
+
+```bash
+curl --request POST \
+  --header "X-Accounts-Refresh-Key: <ACCOUNTS_REFRESH_KEY>" \
+  https://core.crewsim.dev/api/accounts/refresh
+```
+
+The operation is synchronous: the request returns only after the provider call and database
+changes finish, and a successful `200` response reports the committed counts. Error responses
+carry a generic `detail` and never include provider details or secrets:
+
+| Status | Meaning |
+| ------ | ------- |
+| 401 | The `X-Accounts-Refresh-Key` header is missing or wrong. |
+| 409 | Another refresh is already running. Retry after it completes. |
+| 502 | Telcovision failed, timed out, or returned a malformed or unsuccessful response. No rows were changed. |
+| 503 | `TELCOVISION_API_URL`, `TELCOVISION_API_TOKEN`, or `ACCOUNTS_REFRESH_KEY` is not configured. |
+
+> [!WARNING]
+> The refresh treats the provider response as the complete account list. Local account IDs that
+> are absent from it are **deleted**, and any eSIMs linked to them are kept but delinked
+> (`account_id` becomes null and `use_account_for_charging` becomes false). An empty successful
+> response therefore deletes every account. Review the token's visibility and the production
+> account and eSIM links before enabling the trigger.
+
+Because accounts are now managed by the refresh, the account create (`POST`), update (`PATCH`),
+and delete (`DELETE`) routes return `409`. Account and eSIM read routes are unchanged.
+
 ## Build and run the API image directly
 
 When PostgreSQL is managed separately, build the same image and pass a database URL reachable

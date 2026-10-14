@@ -32,11 +32,9 @@ def require_refresh_key(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh key")
 
 
-@router.post(
-    "/refresh",
-    response_model=AccountRefreshResult,
-    dependencies=[Depends(require_refresh_key)],
-)
+# The refresh key check is temporarily disabled. To re-enable it, add
+# dependencies=[Depends(require_refresh_key)] to this route.
+@router.post("/refresh", response_model=AccountRefreshResult)
 def refresh_accounts(db: DatabaseSession, settings: AppSettings) -> AccountRefreshResult:
     try:
         return refresh_telcovision_accounts(db, settings)

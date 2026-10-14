@@ -13,6 +13,9 @@ x-app-environment: &app-environment
   REDIS_PORT: "${REDIS_PORT:-6379}"
   REDIS_USERNAME: "${REDIS_USERNAME:-}"
   REDIS_PASSWORD: "${REDIS_PASSWORD:-}"
+  TELCOVISION_API_URL: "${TELCOVISION_API_URL:-}"
+  TELCOVISION_API_TOKEN: "${TELCOVISION_API_TOKEN:-}"
+  ACCOUNTS_REFRESH_KEY: "${ACCOUNTS_REFRESH_KEY:-}"
 
 x-app-service: &app-service
   image: core-crewsim:local
