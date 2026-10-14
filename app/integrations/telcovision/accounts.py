@@ -1,7 +1,18 @@
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, ValidationError
+from sqlalchemy.orm import Session
 
-from app.accounts.schemas import AccountSnapshot
-from app.integrations.telcovision.client import TelcovisionError
+from app.accounts.manager import AccountManager
+from app.accounts.schemas import AccountRefreshResult, AccountSnapshot
+from app.config import Settings
+from app.integrations.telcovision.client import (
+    TelcovisionClient,
+    TelcovisionError,
+    build_http_client,
+)
+
+
+class TelcovisionNotConfiguredError(Exception):
+    """The provider URL or token is missing from the environment."""
 
 
 class _ProviderAccount(BaseModel):
@@ -57,3 +68,17 @@ def parse_account_snapshot(payload: dict[str, object]) -> list[AccountSnapshot]:
     if len({snapshot.id for snapshot in snapshots}) != len(snapshots):
         raise TelcovisionError("duplicate_account_id")
     return snapshots
+
+
+def refresh_telcovision_accounts(session: Session, settings: Settings) -> AccountRefreshResult:
+    """Fetch the full Telcovision account snapshot and mirror it into the accounts table."""
+    api_url = settings.telcovision_api_url
+    token = settings.telcovision_api_token.get_secret_value()
+    if not api_url or not token:
+        raise TelcovisionNotConfiguredError
+
+    with build_http_client() as http_client:
+        client = TelcovisionClient(api_url, token, http_client)
+        return AccountManager(session).refresh_accounts(
+            lambda: parse_account_snapshot(client.list_reseller_accounts())
+        )
