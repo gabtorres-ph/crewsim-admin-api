@@ -4,13 +4,16 @@ import codecs
 import re
 import time
 from collections.abc import AsyncIterable, AsyncIterator
+from datetime import datetime
 from typing import Any, Dict
+from urllib.parse import urlencode
 from uuid import uuid4
 
 from fastapi import Request, Response
 from starlette.concurrency import iterate_in_threadpool
 from starlette.middleware.base import RequestResponseEndpoint
 
+from app.integrations.redis.outbound_logging import OutboundExchange
 from app.integrations.redis.request_logging import (
     MAX_CAPTURE_BYTES,
     MAX_PATH_LENGTH,
@@ -18,6 +21,8 @@ from app.integrations.redis.request_logging import (
     RequestBodySnapshot,
     RequestLogManager,
 )
+
+OUTBOUND_METRICS_PATH = "__outbound__"
 
 
 def _route_template(request: Request) -> str | None:
@@ -38,6 +43,34 @@ def _fetch_client_ip(request: Request):
         return client.host
 
 
+def _schedule_outbound_logs(
+    exchanges: list[OutboundExchange], *, caller_ip: str, user_id: str
+) -> None:
+    for exchange in exchanges:
+        query = urlencode((item["name"], item["value"]) for item in exchange["query"])
+        url = f'{exchange["target"]}?{query}' if query else exchange["target"]
+        response_body_snapshot = RequestLogManager.capture_sanitized_outbound_body(
+            exchange["response_body"],
+            exchange["response_headers"].get("content-type", ""),
+            exchange["response_body_bytes"],
+            exchange["response_body_omitted"],
+        )
+        RequestLogManager.schedule_log(
+            request_id=uuid4().hex,
+            ts_ms=int(datetime.fromisoformat(exchange["at"]).timestamp() * 1000),
+            caller_ip=caller_ip,
+            user_id=user_id,
+            method=exchange["method"],
+            path=url,
+            metrics_path=OUTBOUND_METRICS_PATH,
+            status=exchange["response_status"] or 0,
+            duration_ms=exchange["duration_ms"],
+            direction="outbound",
+            url=url,
+            response_body_snapshot=response_body_snapshot,
+        )
+
+
 def _schedule_log(
     request: Request,
     *,
@@ -48,16 +81,24 @@ def _schedule_log(
     started_at: float,
     response_body_snapshot: RequestBodySnapshot | None = None,
 ) -> None:
-    if status == 307 or not RequestLogManager.is_enabled():
+    if not RequestLogManager.is_enabled():
         return
 
     user_id = getattr(request.state, "user_id", None)
+    user_label = str(user_id) if user_id else "anonymous"
+    caller_ip = _fetch_client_ip(request) or ""
+    _schedule_outbound_logs(
+        request.state.outbound_exchanges, caller_ip=caller_ip, user_id=user_label
+    )
+    if status == 307:
+        return
+
     route_path = _route_template(request)
     RequestLogManager.schedule_log(
         request_id=request_id,
         ts_ms=ts_ms,
-        caller_ip=_fetch_client_ip(request),
-        user_id=str(user_id) if user_id else "anonymous",
+        caller_ip=caller_ip,
+        user_id=user_label,
         method=request.method,
         # Unmatched URLs stay searchable in the entry but never name a metrics key.
         path=route_path or request.url.path[:MAX_PATH_LENGTH],
@@ -66,7 +107,6 @@ def _schedule_log(
         duration_ms=(time.perf_counter() - started_at) * 1000,
         body_snapshot=body_snapshot,
         response_body_snapshot=response_body_snapshot,
-        outbound_exchanges=list(request.state.outbound_exchanges),
     )
 
 
