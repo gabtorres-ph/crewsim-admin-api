@@ -2,11 +2,11 @@ import logging
 import time
 from collections.abc import Callable
 from urllib.parse import urlsplit
-from uuid import uuid4
 
 import httpx
 
-from app.integrations.telcovision.cache import TelcovisionCache
+from app.integrations.outbound_http import logged_request
+from app.integrations.redis.outbound_logging import OutboundExchange
 
 logger = logging.getLogger(__name__)
 
@@ -41,14 +41,15 @@ class TelcovisionClient:
         api_url: str,
         token: str,
         http_client: httpx.Client,
-        cache: TelcovisionCache | None = None,
-        request_id: str | None = None,
+        request_id: str,
+        outbound_exchanges: list[OutboundExchange],
     ) -> None:
         self._api_url = api_url
         self._token = token
         self._http_client = http_client
-        self._cache = cache
-        self.request_id = request_id or uuid4().hex[:12]
+        self.request_id = request_id
+        self._outbound_exchanges = outbound_exchanges
+        self._outbound_start_index = len(outbound_exchanges)
         # Only host and path are logged; the query string carries the token.
         parts = urlsplit(api_url)
         self._log_target = f"{parts.hostname or 'unknown'}{parts.path}"
@@ -58,20 +59,10 @@ class TelcovisionClient:
         operation: str,
         payload: dict[str, object],
         *,
-        bypass_cache: bool = False,
         validate: Callable[[dict[str, object]], object] | None = None,
     ) -> dict[str, object]:
         """Return a provider body; `validate` must raise TelcovisionError for unusable shapes."""
-        if self._cache is None:
-            return self._send(operation, payload, validate)
-        return self._cache.fetch(
-            operation,
-            payload,
-            lambda: self._send(operation, payload, validate),
-            request_id=self.request_id,
-            bypass=bypass_cache,
-            validate=validate,
-        )
+        return self._send(operation, payload, validate)
 
     def _fail(
         self,
@@ -82,6 +73,13 @@ class TelcovisionClient:
         level: int = logging.ERROR,
         **fields: object,
     ) -> TelcovisionError:
+        if len(self._outbound_exchanges) > self._outbound_start_index:
+            exchange = self._outbound_exchanges[-1]
+            if exchange["request_id"] == self.request_id and exchange["operation"] == operation:
+                if category != "transport":
+                    exchange["error_category"] = category
+                if exchange["outcome"] == "ok":
+                    exchange["outcome"] = "provider_error"
         details = "".join(f" {name}={value}" for name, value in fields.items())
         logger.log(
             level,
@@ -108,11 +106,17 @@ class TelcovisionClient:
             self._log_target,
         )
         started_at = time.perf_counter()
+        self._outbound_start_index = len(self._outbound_exchanges)
         # Exception text from httpx can include the token-bearing URL, so it is never propagated
         # or logged; only the exception class name is.
         try:
-            response = self._http_client.post(
+            response = logged_request(
+                self._http_client,
+                "POST",
                 self._api_url,
+                operation=operation,
+                request_id=self.request_id,
+                exchanges=self._outbound_exchanges,
                 params={"token": self._token},
                 json={operation: payload},
                 headers={"Content-Type": "application/json"},
@@ -191,9 +195,6 @@ class TelcovisionClient:
     def list_reseller_accounts(
         self,
         *,
-        bypass_cache: bool = False,
         validate: Callable[[dict[str, object]], object] | None = None,
     ) -> dict[str, object]:
-        return self._request(
-            "listResellerAccount", {}, bypass_cache=bypass_cache, validate=validate
-        )
+        return self._request("listResellerAccount", {}, validate=validate)

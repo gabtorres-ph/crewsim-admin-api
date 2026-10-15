@@ -2,7 +2,7 @@ import logging
 import secrets
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.accounts.manager import AccountManager
@@ -38,12 +38,17 @@ def require_refresh_key(
 # dependencies=[Depends(require_refresh_key)] to this route.
 @router.post("/refresh", response_model=AccountRefreshResult)
 def refresh_accounts(
+    request: Request,
     db: DatabaseSession,
     settings: AppSettings,
-    force: Annotated[bool, Query(description="Skip the cached provider response.")] = False,
 ) -> AccountRefreshResult:
     try:
-        return refresh_telcovision_accounts(db, settings, force=force)
+        return refresh_telcovision_accounts(
+            db,
+            settings,
+            request_id=request.state.request_id,
+            outbound_exchanges=request.state.outbound_exchanges,
+        )
     except TelcovisionNotConfiguredError:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE, "Account refresh is not configured"

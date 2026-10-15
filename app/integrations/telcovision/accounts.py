@@ -1,5 +1,4 @@
 import logging
-from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, ValidationError
 from sqlalchemy.orm import Session
@@ -7,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.accounts.manager import AccountManager
 from app.accounts.schemas import AccountRefreshResult, AccountSnapshot
 from app.config import Settings
-from app.integrations.telcovision.cache import TelcovisionCache
+from app.integrations.redis.outbound_logging import OutboundExchange
 from app.integrations.telcovision.client import (
     TelcovisionClient,
     TelcovisionError,
@@ -77,25 +76,24 @@ def parse_account_snapshot(payload: dict[str, object]) -> list[AccountSnapshot]:
 
 
 def refresh_telcovision_accounts(
-    session: Session, settings: Settings, *, force: bool = False
+    session: Session,
+    settings: Settings,
+    *,
+    request_id: str,
+    outbound_exchanges: list[OutboundExchange],
 ) -> AccountRefreshResult:
-    """Fetch the full Telcovision account snapshot and mirror it into the accounts table.
-
-    The provider response is cached briefly; `force` skips the cache read and refreshes the entry.
-    """
-    request_id = uuid4().hex[:12]
+    """Fetch a live Telcovision account snapshot and mirror it into the accounts table."""
     api_url = settings.telcovision_api_url
     token = settings.telcovision_api_token.get_secret_value()
     if not api_url or not token:
         logger.error("Telcovision refresh not configured request_id=%s", request_id)
         raise TelcovisionNotConfiguredError
 
-    logger.info("Telcovision accounts refresh started request_id=%s force=%s", request_id, force)
-    cache = TelcovisionCache.from_settings(settings, scope=api_url)
+    logger.info("Telcovision accounts refresh started request_id=%s", request_id)
 
     def load_snapshot() -> list[AccountSnapshot]:
         snapshots = parse_account_snapshot(
-            client.list_reseller_accounts(bypass_cache=force, validate=parse_account_snapshot)
+            client.list_reseller_accounts(validate=parse_account_snapshot)
         )
         logger.info(
             "Telcovision accounts snapshot parsed request_id=%s accounts=%d",
@@ -105,5 +103,5 @@ def refresh_telcovision_accounts(
         return snapshots
 
     with build_http_client() as http_client:
-        client = TelcovisionClient(api_url, token, http_client, cache, request_id)
+        client = TelcovisionClient(api_url, token, http_client, request_id, outbound_exchanges)
         return AccountManager(session).refresh_accounts(load_snapshot)
