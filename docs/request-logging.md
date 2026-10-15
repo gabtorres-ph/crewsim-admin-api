@@ -1,6 +1,35 @@
 # Request Logging (Redis-backed)
 
-This document describes the HTTP request/response logging subsystem in `core.mytello.com` well enough to re-implement it in another codebase. It covers what is captured, how it is stored in Redis, how it expires, how it is queried, and which parts are specific to this application.
+## Current CrewSim outbound inspection
+
+The request-logging middleware assigns an ID to each inbound request and initializes
+`request.state.outbound_exchanges`. Telcovision passes both values to `logged_request` in
+`app/integrations/outbound_http.py`. Each live HTTP attempt appends a sanitized request/response
+exchange, including HTTP and transport failures. `logged_async_request` provides the same capture
+path for future asynchronous integrations. New outbound integrations must use one of these helpers
+and pass the inbound request ID and exchange collector; direct `httpx` calls are not captured.
+
+The existing background request-log write stores a non-empty exchange list as JSON at
+`req:{request_id}:outbound`, with the same three-day TTL as the inbound log. Reads with
+`include_body=true` return it as the ordered `outbound` field; deletion and expiry remove the key
+with the parent log. `GET /api/utils/request-logs/{request_id}` includes it by default, while the
+list endpoint requires `include_body=true`. These endpoints currently have no application-level
+access check. If Redis is unconfigured or unavailable, outbound logging has no effect on the
+provider call.
+
+Each exchange records the operation, timestamp, method, safe destination, redacted query, selected
+request and response headers, request and response bodies, status, duration, outcome, and error
+category. URL credentials and fragments are omitted; sensitive query and structured-body keys are
+redacted; only `Accept`, `Content-Type`, and `Content-Length` headers are kept. JSON and form bodies
+are kept in full up to 5 MiB each. Oversized, unreadable, malformed, and unsupported bodies become
+omission markers with a reason and byte count. The Redis value is an inspection record only:
+Telcovision refreshes always call the provider, and no response is replayed from Redis. Compose
+Redis has no disk persistence and can evict records before the three-day TTL.
+
+Configuration uses `REDIS_HOST`, `REDIS_PORT`, `REDIS_USERNAME`, and `REDIS_PASSWORD`; an empty
+host disables logging. There is no outbound-specific switch or request-log access key. The rest
+of this document retains historical porting notes from `core.mytello.com`; use the current
+behavior above and the source files for CrewSim-specific details.
 
 Source files:
 
@@ -8,12 +37,20 @@ Source files:
 |---|---|
 | `app/integrations/redis/request_logging.py` | `RequestLogManager`: body capture/redaction, Redis writes, cleanup, queries |
 | `app/integrations/redis/request_logging_middleware.py` | `handle_request_logging`: per-request wrapper around `call_next` |
+| `app/integrations/outbound_http.py` | Shared synchronous and asynchronous outbound HTTP capture |
+| `app/integrations/redis/outbound_logging.py` | Outbound exchange schema and sanitization |
 | `app/main.py` | Registers the middleware; init/cleanup/close on startup/shutdown |
-| `app/utils/routes.py` | Admin endpoints under `/api/utils/request-logs` |
+| `app/utils/routes.py` | Inspection endpoints under `/api/utils/request-logs` |
 | `app/utils/schemas.py` | `RequestLogEntry`, `RequestLogMetricsResponse` response models |
 | `app/integrations/redis/test_request_logging.py` | Unit tests with a fake Redis client |
 
 ---
+
+## Historical porting reference
+
+The following sections describe the original HTTP request/response logging subsystem and its
+porting considerations. Some configuration, authorization, and attribution details differ from
+the current CrewSim implementation.
 
 ## 1. Overview
 

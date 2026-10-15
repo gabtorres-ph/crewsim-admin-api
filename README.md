@@ -192,20 +192,19 @@ by this FastAPI application.
 ### Telcovision account refresh
 
 `POST /api/accounts/refresh` synchronizes local accounts with the Telcovision reseller account
-list. Set these as deployment secrets (for example in Dokploy); never commit them or bake them
-into the image:
+list. Set these provider values as deployment secrets (for example in Dokploy); never commit them
+or bake them into the image:
 
 - `TELCOVISION_API_URL`: Telcovision API base URL.
 - `TELCOVISION_API_TOKEN`: provider API token. It is used only by the server and must never
   appear in a trigger command or URL.
-- `ACCOUNTS_REFRESH_KEY`: shared secret callers send in the `X-Accounts-Refresh-Key` header.
 
-Trigger a refresh, substituting a real key for the placeholder (and adding any Cloudflare Access
-headers your deployment requires):
+The `ACCOUNTS_REFRESH_KEY` setting and `X-Accounts-Refresh-Key` check exist, but the route's key
+check is currently disabled. Trigger a refresh with any Cloudflare Access headers your deployment
+requires:
 
 ```bash
 curl --request POST \
-  --header "X-Accounts-Refresh-Key: <ACCOUNTS_REFRESH_KEY>" \
   https://core.crewsim.dev/api/accounts/refresh
 ```
 
@@ -215,10 +214,9 @@ carry a generic `detail` and never include provider details or secrets:
 
 | Status | Meaning |
 | ------ | ------- |
-| 401 | The `X-Accounts-Refresh-Key` header is missing or wrong. |
 | 409 | Another refresh is already running. Retry after it completes. |
 | 502 | Telcovision failed, timed out, or returned a malformed or unsuccessful response. No rows were changed. The body is `{"detail": {"message", "category", "provider_code"}}`. |
-| 503 | `TELCOVISION_API_URL`, `TELCOVISION_API_TOKEN`, or `ACCOUNTS_REFRESH_KEY` is not configured. |
+| 503 | `TELCOVISION_API_URL` or `TELCOVISION_API_TOKEN` is not configured. |
 
 > [!WARNING]
 > The refresh treats the provider response as the complete account list. Local account IDs that
@@ -227,23 +225,29 @@ carry a generic `detail` and never include provider details or secrets:
 > response therefore deletes every account. Review the token's visibility and the production
 > account and eSIM links before enabling the trigger.
 
-#### Response cache and logging
+#### Outbound exchange inspection
 
-The parsed Telcovision response is cached in Redis (`telcovision:v1:<operation>:<hash>`) for
-`TELCOVISION_CACHE_TTL_SECONDS` (default 60), so retries and double-clicks do not hit the provider
-again. A cache hit still runs the full database sync. `POST /api/accounts/refresh?force=true`
-skips the cache read and refreshes the entry.
+Every account refresh fetches a live Telcovision response. Redis stores an inspection record of
+the outbound HTTP exchange under `req:{request_id}:outbound` for up to three days; it does not
+serve responses back to account refreshes. To find a record, list
+`GET /api/utils/request-logs?path=/api/accounts/refresh&include_body=true`, then inspect
+`GET /api/utils/request-logs/{request_id}`. The `outbound` field contains the request method,
+destination, redacted query, selected headers, request body, response status and body, duration,
+and outcome. The detail endpoint includes bodies by default; the list endpoint requires
+`include_body=true`. These endpoints currently have no application-level access check.
 
-- The cache is disabled (one startup warning) without Redis or with
-  `TELCOVISION_CACHE_ENABLED=false`, and every refresh then calls the provider. Cached values are
-  not encrypted yet.
-- Only successful, shape-validated responses are cached; entries that are unreadable or fail validation
-  are evicted. Redis errors are logged and never fail a refresh.
-- Logger `app.integrations.telcovision.*` records each call with a shared `request_id`, operation,
-  host/path, duration, HTTP status, and a failure `category`. Alert on `ERROR` lines
-  (`transport`, `http_status`, `invalid_json`, `invalid_response`) and on `provider_status` or
-  `cache ... failed` warnings. The token, full URL, keys, and response bodies are never logged, and
-  the `httpx` logger is held at `WARNING` because it prints the token-bearing URL.
+The token and other sensitive query or structured-body values are redacted before storage, and
+credential headers are omitted. Each outbound body is stored in full up to 5 MiB; larger,
+unparseable, or unsupported bodies are represented by an omission marker and byte count. Redis
+logging is disabled when `REDIS_HOST` is empty, and Redis failures do not fail the refresh. The
+Compose Redis instance has no disk persistence and may evict records before their three-day TTL.
+
+Logger `app.integrations.telcovision.*` records the shared `request_id`, operation, host/path,
+duration, HTTP status, and failure category without response bodies or the token-bearing URL.
+The `httpx` logger is held at `WARNING` because it prints the token-bearing URL at `INFO`.
+New outbound integrations should use `logged_request` or `logged_async_request` from
+`app/integrations/outbound_http.py` and pass the inbound request ID and exchange collector so
+their calls appear in the same inspection record.
 
 Because accounts are now managed by the refresh, the account create (`POST`), update (`PATCH`),
 and delete (`DELETE`) routes return `409`. Account and eSIM read routes are unchanged.

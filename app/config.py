@@ -27,10 +27,6 @@ class Settings(BaseSettings):
     )
     telcovision_api_url: str = Field(default="", alias="TELCOVISION_API_URL")
     telcovision_api_token: SecretStr = Field(default=SecretStr(""), alias="TELCOVISION_API_TOKEN")
-    telcovision_cache_enabled: bool = Field(default=True, alias="TELCOVISION_CACHE_ENABLED")
-    telcovision_cache_ttl_seconds: int = Field(
-        default=60, alias="TELCOVISION_CACHE_TTL_SECONDS", ge=1, le=3600
-    )
     accounts_refresh_key: SecretStr = Field(default=SecretStr(""), alias="ACCOUNTS_REFRESH_KEY")
 
     model_config = SettingsConfigDict(
