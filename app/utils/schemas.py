@@ -1,6 +1,6 @@
 """Response schemas for request-log administration endpoints."""
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -9,6 +9,8 @@ class RequestLogEntry(BaseModel):
     """A decoded request-log record and its optional captured bodies."""
 
     request_id: str
+    direction: Literal["inbound", "outbound"] = "inbound"
+    url: str | None = None
     ts: int
     timestamp: str | None = None
     caller_ip: str
