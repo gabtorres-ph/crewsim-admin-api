@@ -10,7 +10,7 @@ import zlib
 from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal
 from urllib.parse import parse_qs
 
 from fastapi import Request
@@ -187,6 +187,21 @@ class RequestLogManager:
         return RequestBodySnapshot(content_type, length, stored_body, truncated, gzip_encoded)
 
     @classmethod
+    def capture_sanitized_outbound_body(
+        cls, body: Any, content_type: str, raw_length: int, omitted: bool
+    ) -> RequestBodySnapshot:
+        """Store an already sanitized outbound body without the inbound 32 KiB cap."""
+        try:
+            stored_body = json.dumps(body, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+        except (TypeError, ValueError, RecursionError):
+            stored_body = cls._omitted_body("capture_failed", content_type, raw_length)
+            omitted = True
+        gzip_encoded = len(stored_body) > COMPRESS_THRESHOLD_BYTES
+        if gzip_encoded:
+            stored_body = gzip.compress(stored_body)
+        return RequestBodySnapshot(content_type, raw_length, stored_body, omitted, gzip_encoded)
+
+    @classmethod
     def _decode_stored_body(cls, body: bytes, *, gzip_encoded: bool) -> Any:
         """Decode stored JSON or text, tolerating damaged gzip and truncated JSON."""
         if gzip_encoded:
@@ -282,6 +297,8 @@ class RequestLogManager:
         metrics_path: str,
         status: int,
         duration_ms: float,
+        direction: Literal["inbound", "outbound"] = "inbound",
+        url: str | None = None,
         body_snapshot: RequestBodySnapshot | None = None,
         response_body_snapshot: RequestBodySnapshot | None = None,
         outbound_exchanges: list[dict[str, Any]] | None = None,
@@ -310,6 +327,7 @@ class RequestLogManager:
                 "user_id": user_id,
                 "method": method,
                 "path": path,
+                "direction": direction,
                 "status": str(status),
                 "duration_ms": str(int(duration_ms)),
                 "req_body_key": body_key,
@@ -323,6 +341,8 @@ class RequestLogManager:
                 "resp_body_gzip": str(int(response_body.gzip)),
                 "resp_content_type": response_body.content_type,
             }
+            if url is not None:
+                metadata["url"] = url
             async with client.pipeline(transaction=True) as pipeline:
                 pipeline.hset(request_key, mapping=metadata)
                 pipeline.expire(request_key, REQUEST_LOG_TTL_SECONDS)
@@ -337,12 +357,6 @@ class RequestLogManager:
                 pipeline.hincrby(metrics_key, "count", 1)
                 pipeline.hincrbyfloat(metrics_key, "total_duration_ms", duration_ms)
                 pipeline.expire(metrics_key, REQUEST_LOG_TTL_SECONDS)
-                if outbound_exchanges:
-                    pipeline.set(
-                        outbound_key(request_id),
-                        json.dumps(outbound_exchanges, separators=(",", ":")),
-                        ex=REQUEST_LOG_TTL_SECONDS,
-                    )
                 results = await pipeline.execute()
             count, total_duration = int(results[10]), float(results[11])
             async with client.pipeline(transaction=True) as pipeline:
