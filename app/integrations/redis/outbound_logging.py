@@ -1,24 +1,11 @@
 """Safe, short-lived records of outbound HTTP exchanges."""
 
-import json
-import logging
 import re
 from collections.abc import Mapping
 from typing import Any, TypedDict
 from urllib.parse import parse_qs, parse_qsl, urlsplit
 
-from redis.exceptions import RedisError
-
-from app.config import Settings
-from app.integrations.redis.request_logging import (
-    REDACTED_VALUE,
-    REQUEST_LOG_TTL_SECONDS,
-    SENSITIVE_KEY_PARTS,
-    RequestLogManager,
-)
-from app.integrations.redis.sync_client import get_sync_redis
-
-logger = logging.getLogger(__name__)
+from app.integrations.redis.request_logging import REDACTED_VALUE, SENSITIVE_KEY_PARTS
 
 MAX_OUTBOUND_BODY_BYTES = 5 * 1024 * 1024
 SAFE_HEADER_NAMES = frozenset({"accept", "content-type", "content-length"})
@@ -46,11 +33,6 @@ class OutboundExchange(TypedDict):
     duration_ms: float
     outcome: str
     error_category: str | None
-
-
-def outbound_key(request_id: str) -> str:
-    """Return the Redis key for exchanges attached to one inbound request."""
-    return f"req:{request_id}:outbound"
 
 
 def _is_sensitive(name: str) -> bool:
@@ -130,31 +112,3 @@ def sanitize_outbound_body(body: bytes | None, content_type: str) -> tuple[Any, 
         return safe_value, length, False
     except (UnicodeDecodeError, ValueError, TypeError, RecursionError):
         return _omitted_body("unparseable", content_type, length), length, True
-
-
-def _to_entry(call: dict[str, Any]) -> dict[str, Any]:
-    entry = {key: value for key, value in call.items() if key != "body_text"}
-    body_text = call.get("body_text")
-    if isinstance(body_text, str):
-        entry["body"], entry["body_bytes"], entry["body_omitted"] = sanitize_outbound_body(
-            body_text.encode("utf-8"), str(call.get("content_type") or "application/json")
-        )
-    return entry
-
-
-def write_outbound_calls(settings: Settings, request_id: str, calls: list[dict[str, Any]]) -> None:
-    """Persist outbound call records; never raises, because logging must not fail the request."""
-    if not calls or not RequestLogManager.is_enabled():
-        return
-    client = get_sync_redis(settings)
-    if client is None:
-        return
-    try:
-        payload = json.dumps([_to_entry(call) for call in calls], default=str)
-        client.set(outbound_key(request_id), payload, ex=REQUEST_LOG_TTL_SECONDS)
-    except (RedisError, TypeError, ValueError) as error:
-        logger.warning(
-            "Outbound request logging failed request_id=%s error=%s",
-            request_id,
-            type(error).__name__,
-        )
