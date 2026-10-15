@@ -47,7 +47,7 @@ def _schedule_outbound_logs(
     exchanges: list[OutboundExchange], *, caller_ip: str, user_id: str
 ) -> None:
     for exchange in exchanges:
-        query = urlencode((item["name"], item["value"]) for item in exchange["query"])
+        query = urlencode([(item["name"], item["value"]) for item in exchange["query"]])
         url = f'{exchange["target"]}?{query}' if query else exchange["target"]
         response_body_snapshot = RequestLogManager.capture_sanitized_outbound_body(
             exchange["response_body"],
