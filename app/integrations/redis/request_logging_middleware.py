@@ -13,6 +13,7 @@ from fastapi import Request, Response
 from starlette.concurrency import iterate_in_threadpool
 from starlette.middleware.base import RequestResponseEndpoint
 
+from app.integrations.redis.client_ip import ClientIpCapture, resolve_public_client_ips
 from app.integrations.redis.outbound_logging import OutboundExchange
 from app.integrations.redis.request_logging import (
     MAX_CAPTURE_BYTES,
@@ -33,18 +34,8 @@ def _route_template(request: Request) -> str | None:
     return re.sub(r"\{([^{}:]+)(?::[^{}]+)?\}", r":\1", route_path)
 
 
-def _fetch_client_ip(request: Request):
-    # this assumes that we can accurately capture the caller ip
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    client = request.client
-    if client and client.host:
-        return client.host
-
-
 def _schedule_outbound_logs(
-    exchanges: list[OutboundExchange], *, caller_ip: str, user_id: str
+    exchanges: list[OutboundExchange], *, client_ip: ClientIpCapture, user_id: str
 ) -> None:
     for exchange in exchanges:
         query = urlencode([(item["name"], item["value"]) for item in exchange["query"]])
@@ -58,7 +49,9 @@ def _schedule_outbound_logs(
         RequestLogManager.schedule_log(
             request_id=uuid4().hex,
             ts_ms=int(datetime.fromisoformat(exchange["at"]).timestamp() * 1000),
-            caller_ip=caller_ip,
+            caller_ip=client_ip.caller_ip,
+            caller_ip_source=client_ip.caller_ip_source,
+            client_ip_candidates=client_ip.candidates,
             user_id=user_id,
             method=exchange["method"],
             path=url,
@@ -86,9 +79,9 @@ def _schedule_log(
 
     user_id = getattr(request.state, "user_id", None)
     user_label = str(user_id) if user_id else "anonymous"
-    caller_ip = _fetch_client_ip(request) or ""
+    client_ip = resolve_public_client_ips(request)
     _schedule_outbound_logs(
-        request.state.outbound_exchanges, caller_ip=caller_ip, user_id=user_label
+        request.state.outbound_exchanges, client_ip=client_ip, user_id=user_label
     )
     if status == 307:
         return
@@ -97,7 +90,9 @@ def _schedule_log(
     RequestLogManager.schedule_log(
         request_id=request_id,
         ts_ms=ts_ms,
-        caller_ip=caller_ip,
+        caller_ip=client_ip.caller_ip,
+        caller_ip_source=client_ip.caller_ip_source,
+        client_ip_candidates=client_ip.candidates,
         user_id=user_label,
         method=request.method,
         # Unmatched URLs stay searchable in the entry but never name a metrics key.

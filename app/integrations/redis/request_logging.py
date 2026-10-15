@@ -17,6 +17,8 @@ from fastapi import Request
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
+from app.integrations.redis.client_ip import ClientIpCandidate
+
 logger = logging.getLogger(__name__)
 
 REQUEST_LOG_TTL_SECONDS = 259200
@@ -302,6 +304,8 @@ class RequestLogManager:
         body_snapshot: RequestBodySnapshot | None = None,
         response_body_snapshot: RequestBodySnapshot | None = None,
         outbound_exchanges: list[dict[str, Any]] | None = None,
+        caller_ip_source: str = "",
+        client_ip_candidates: list[ClientIpCandidate] | None = None,
     ) -> None:
         """Persist a request and refresh every touched key's retention period.
 
@@ -324,6 +328,11 @@ class RequestLogManager:
                 "ts": str(ts_ms),
                 "timestamp": datetime.fromtimestamp(ts_ms / 1000, tz=UTC).isoformat(),
                 "caller_ip": caller_ip,
+                "caller_ip_source": caller_ip_source,
+                "client_ip_candidates": json.dumps(
+                    [c.model_dump() for c in client_ip_candidates or []],
+                    separators=(",", ":"),
+                ),
                 "user_id": user_id,
                 "method": method,
                 "path": path,
@@ -503,6 +512,11 @@ class RequestLogManager:
             for key, value in metadata.items()
         }
         entry["request_id"] = request_id
+        try:
+            candidates = json.loads(entry.get("client_ip_candidates") or "[]")
+        except ValueError:
+            candidates = []
+        entry["client_ip_candidates"] = candidates if isinstance(candidates, list) else []
         for field in ("ts", "status", "duration_ms", "req_body_len", "resp_body_len"):
             if field in entry:
                 entry[field] = int(entry[field])

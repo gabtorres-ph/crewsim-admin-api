@@ -33,7 +33,7 @@ Apply migrations and start the local API with:
 
 ```bash
 uv run --active alembic upgrade head
-uv run --active uvicorn app.main:app --reload
+uv run --active uvicorn app.main:app --reload --no-proxy-headers
 ```
 
 The API is available at `http://localhost:8000`, with interactive documentation at
@@ -188,6 +188,20 @@ by this FastAPI application.
 > A browser bundle cannot keep `CF-Access-Client-Secret` confidential. If the frontend runs in
 > users' browsers, inject the service-token headers in a trusted server-side proxy or Cloudflare
 > Worker instead of exposing the token in frontend code.
+
+### Caller IP in request logs
+
+`caller_ip` is the first globally reachable IP found, reported rather than verified. Candidates are
+checked in this order (each with its source in `caller_ip_source` and `client_ip_candidates`):
+`CF-Connecting-IPv6`, `CF-Connecting-IP`, `True-Client-IP`, `Fastly-Client-IP`,
+`CloudFront-Viewer-Address`, `X-Azure-ClientIP`, `X-Azure-SocketIP`, `X-Envoy-External-Address`,
+`Forwarded`, `X-Forwarded-For`, `X-Original-Forwarded-For`, `X-Real-IP`, `X-Client-IP`,
+`Client-IP`, `X-Cluster-Client-IP`, then the socket address.
+
+Private, loopback, link-local, shared, reserved, multicast, and malformed values are skipped. If
+nothing public remains, `caller_ip` is empty. Header values can be spoofed, so never use
+`caller_ip` for access control. Uvicorn runs with `--no-proxy-headers` so the socket address is the
+real connection peer; check HTTPS redirects after deploying behind a proxy.
 
 ### Telcovision account refresh
 

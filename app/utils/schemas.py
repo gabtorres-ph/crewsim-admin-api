@@ -4,6 +4,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.integrations.redis.client_ip import ClientIpCandidate
+
 
 class RequestLogEntry(BaseModel):
     """A decoded request-log record and its optional captured bodies."""
@@ -14,6 +16,8 @@ class RequestLogEntry(BaseModel):
     ts: int
     timestamp: str | None = None
     caller_ip: str
+    caller_ip_source: str = ""
+    client_ip_candidates: list[ClientIpCandidate] = Field(default_factory=list)
     user_id: str
     method: str
     path: str
