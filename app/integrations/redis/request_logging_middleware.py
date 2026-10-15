@@ -40,6 +40,12 @@ def _schedule_outbound_logs(
     for exchange in exchanges:
         query = urlencode([(item["name"], item["value"]) for item in exchange["query"]])
         url = f'{exchange["target"]}?{query}' if query else exchange["target"]
+        body_snapshot = RequestLogManager.capture_sanitized_outbound_body(
+            exchange["request_body"],
+            exchange["request_headers"].get("content-type", ""),
+            exchange["request_body_bytes"],
+            exchange["request_body_omitted"],
+        )
         response_body_snapshot = RequestLogManager.capture_sanitized_outbound_body(
             exchange["response_body"],
             exchange["response_headers"].get("content-type", ""),
@@ -60,6 +66,7 @@ def _schedule_outbound_logs(
             duration_ms=exchange["duration_ms"],
             direction="outbound",
             url=url,
+            body_snapshot=body_snapshot,
             response_body_snapshot=response_body_snapshot,
         )
 

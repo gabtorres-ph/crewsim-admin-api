@@ -44,7 +44,7 @@ async def list_request_logs(
     path: Annotated[str | None, Query()] = None,
     from_: Annotated[datetime | None, Query(alias="from")] = None,
     to: Annotated[datetime | None, Query()] = None,
-    include_body: Annotated[bool, Query()] = False,
+    include_body: Annotated[bool, Query()] = True,
     page: Annotated[int, Query(ge=1)] = 1,
     limit: Annotated[int, Query(ge=1, le=1000)] = DEFAULT_PAGE_LIMIT,
     page_size: Annotated[int | None, Query(ge=1, le=1000)] = None,
