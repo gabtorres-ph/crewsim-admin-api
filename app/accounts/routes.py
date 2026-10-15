@@ -1,3 +1,4 @@
+import logging
 import secrets
 from typing import Annotated
 
@@ -14,6 +15,7 @@ from app.integrations.telcovision.accounts import (
 )
 from app.integrations.telcovision.client import TelcovisionError
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 DatabaseSession = Annotated[Session, Depends(get_db)]
 AppSettings = Annotated[Settings, Depends(get_settings)]
@@ -35,14 +37,23 @@ def require_refresh_key(
 # The refresh key check is temporarily disabled. To re-enable it, add
 # dependencies=[Depends(require_refresh_key)] to this route.
 @router.post("/refresh", response_model=AccountRefreshResult)
-def refresh_accounts(db: DatabaseSession, settings: AppSettings) -> AccountRefreshResult:
+def refresh_accounts(
+    db: DatabaseSession,
+    settings: AppSettings,
+    force: Annotated[bool, Query(description="Skip the cached provider response.")] = False,
+) -> AccountRefreshResult:
     try:
-        return refresh_telcovision_accounts(db, settings)
+        return refresh_telcovision_accounts(db, settings, force=force)
     except TelcovisionNotConfiguredError:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE, "Account refresh is not configured"
         ) from None
-    except TelcovisionError:
+    except TelcovisionError as error:
+        logger.warning(
+            "Telcovision account refresh failed category=%s provider_code=%s",
+            error.category,
+            error.provider_code,
+        )
         raise HTTPException(
             status.HTTP_502_BAD_GATEWAY, "Telcovision account refresh failed"
         ) from None

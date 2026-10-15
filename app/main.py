@@ -14,6 +14,7 @@ from app.common.exceptions import (
 from app.config import get_settings
 from app.integrations.redis.request_logging import RequestLogManager
 from app.integrations.redis.request_logging_middleware import handle_request_logging
+from app.integrations.redis.sync_client import close_sync_redis
 from app.routes import api_router
 
 settings = get_settings()
@@ -32,6 +33,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         await RequestLogManager.close()
+        close_sync_redis()
 
 
 app = FastAPI(title=settings.app_name, debug=settings.app_debug, lifespan=lifespan)

@@ -227,6 +227,24 @@ carry a generic `detail` and never include provider details or secrets:
 > response therefore deletes every account. Review the token's visibility and the production
 > account and eSIM links before enabling the trigger.
 
+#### Response cache and logging
+
+The parsed Telcovision response is cached in Redis (`telcovision:v1:<operation>:<hash>`) for
+`TELCOVISION_CACHE_TTL_SECONDS` (default 60), so retries and double-clicks do not hit the provider
+again. A cache hit still runs the full database sync. `POST /api/accounts/refresh?force=true`
+skips the cache read and refreshes the entry.
+
+- The cache is disabled (one startup warning) without Redis or with
+  `TELCOVISION_CACHE_ENABLED=false`, and every refresh then calls the provider. Cached values are
+  not encrypted yet.
+- Only successful, shape-validated responses are cached; entries that are unreadable or fail validation
+  are evicted. Redis errors are logged and never fail a refresh.
+- Logger `app.integrations.telcovision.*` records each call with a shared `request_id`, operation,
+  host/path, duration, HTTP status, and a failure `category`. Alert on `ERROR` lines
+  (`transport`, `http_status`, `invalid_json`, `invalid_response`) and on `provider_status` or
+  `cache ... failed` warnings. The token, full URL, keys, and response bodies are never logged, and
+  the `httpx` logger is held at `WARNING` because it prints the token-bearing URL.
+
 Because accounts are now managed by the refresh, the account create (`POST`), update (`PATCH`),
 and delete (`DELETE`) routes return `409`. Account and eSIM read routes are unchanged.
 
