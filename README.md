@@ -217,7 +217,7 @@ carry a generic `detail` and never include provider details or secrets:
 | ------ | ------- |
 | 401 | The `X-Accounts-Refresh-Key` header is missing or wrong. |
 | 409 | Another refresh is already running. Retry after it completes. |
-| 502 | Telcovision failed, timed out, or returned a malformed or unsuccessful response. No rows were changed. |
+| 502 | Telcovision failed, timed out, or returned a malformed or unsuccessful response. No rows were changed. The body is `{"detail": {"message", "category", "provider_code"}}`. |
 | 503 | `TELCOVISION_API_URL`, `TELCOVISION_API_TOKEN`, or `ACCOUNTS_REFRESH_KEY` is not configured. |
 
 > [!WARNING]

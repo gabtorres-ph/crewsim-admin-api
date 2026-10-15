@@ -77,3 +77,25 @@ async def test_account_routes_read_and_reject_direct_writes(client, db_session: 
     assert (await client.delete(f"/api/esims/{esim['id']}")).status_code == 204
     assert (await client.delete(f"/api/accounts/{account_id}")).status_code == 409
     assert (await client.get(f"/api/accounts/{account_id}")).json() == account
+
+
+@pytest.mark.asyncio
+async def test_refresh_failure_includes_telcovision_details(client, monkeypatch) -> None:
+    from app.accounts import routes
+    from app.integrations.telcovision.client import TelcovisionError
+
+    def fail(*args, **kwargs):
+        raise TelcovisionError("http_error", 503)
+
+    monkeypatch.setattr(routes, "refresh_telcovision_accounts", fail)
+
+    response = await client.post("/api/accounts/refresh")
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": {
+            "message": "Telcovision account refresh failed",
+            "category": "http_error",
+            "provider_code": 503,
+        }
+    }

@@ -55,7 +55,12 @@ def refresh_accounts(
             error.provider_code,
         )
         raise HTTPException(
-            status.HTTP_502_BAD_GATEWAY, "Telcovision account refresh failed"
+            status.HTTP_502_BAD_GATEWAY,
+            {
+                "message": "Telcovision account refresh failed",
+                "category": error.category,
+                "provider_code": error.provider_code,
+            },
         ) from None
 
 
