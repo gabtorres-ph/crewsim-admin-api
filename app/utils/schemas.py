@@ -29,6 +29,7 @@ class RequestLogEntry(BaseModel):
     resp_content_type: str | None = None
     body: Any | None = None
     response_body: Any | None = None
+    outbound: list[dict[str, Any]] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="allow")
 

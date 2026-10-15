@@ -36,6 +36,11 @@ SENSITIVE_KEY_PARTS = (
 )
 
 
+def outbound_key(request_id: str) -> str:
+    """Return the key for outbound exchanges linked to an inbound request."""
+    return f"req:{request_id}:outbound"
+
+
 @dataclass
 class RequestBodySnapshot:
     content_type: str
@@ -279,6 +284,7 @@ class RequestLogManager:
         duration_ms: float,
         body_snapshot: RequestBodySnapshot | None = None,
         response_body_snapshot: RequestBodySnapshot | None = None,
+        outbound_exchanges: list[dict[str, Any]] | None = None,
     ) -> None:
         """Persist a request and refresh every touched key's retention period.
 
@@ -331,6 +337,12 @@ class RequestLogManager:
                 pipeline.hincrby(metrics_key, "count", 1)
                 pipeline.hincrbyfloat(metrics_key, "total_duration_ms", duration_ms)
                 pipeline.expire(metrics_key, REQUEST_LOG_TTL_SECONDS)
+                if outbound_exchanges:
+                    pipeline.set(
+                        outbound_key(request_id),
+                        json.dumps(outbound_exchanges, separators=(",", ":")),
+                        ex=REQUEST_LOG_TTL_SECONDS,
+                    )
                 results = await pipeline.execute()
             count, total_duration = int(results[10]), float(results[11])
             async with client.pipeline(transaction=True) as pipeline:
@@ -411,7 +423,7 @@ class RequestLogManager:
                         for request_id in batch
                         for key in (
                             f"req:{request_id}", f"req:{request_id}:body",
-                            f"req:{request_id}:response_body",
+                            f"req:{request_id}:response_body", outbound_key(request_id),
                         )
                     ))
                     await pipeline.execute()
@@ -524,6 +536,8 @@ class RequestLogManager:
                         pipeline.get(f"req:{request_id}:body")
                     for request_id in ids:
                         pipeline.get(f"req:{request_id}:response_body")
+                    for request_id in ids:
+                        pipeline.get(outbound_key(request_id))
                 results = await pipeline.execute()
             entries = []
             missing = []
@@ -532,14 +546,22 @@ class RequestLogManager:
                 if not results[index]:
                     missing.append(request_id)
                     continue
-                entries.append(
-                    cls._decode_entry(
-                        request_id,
-                        results[index],
-                        results[size + index] if include_body else None,
-                        results[2 * size + index] if include_body else None,
-                    )
+                entry = cls._decode_entry(
+                    request_id,
+                    results[index],
+                    results[size + index] if include_body else None,
+                    results[2 * size + index] if include_body else None,
                 )
+                if include_body and (outbound_data := results[3 * size + index]) is not None:
+                    try:
+                        outbound = json.loads(outbound_data)
+                        if isinstance(outbound, list):
+                            entry["outbound"] = outbound
+                    except (TypeError, ValueError):
+                        logger.warning(
+                            "Request logging outbound entry unreadable request_id=%s", request_id
+                        )
+                entries.append(entry)
             if missing and index_key is not None:
                 await cls._delete_request_data(missing, index_key=index_key)
             return entries

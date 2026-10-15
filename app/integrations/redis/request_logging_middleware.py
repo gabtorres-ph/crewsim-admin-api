@@ -66,6 +66,7 @@ def _schedule_log(
         duration_ms=(time.perf_counter() - started_at) * 1000,
         body_snapshot=body_snapshot,
         response_body_snapshot=response_body_snapshot,
+        outbound_exchanges=list(request.state.outbound_exchanges),
     )
 
 
@@ -138,6 +139,7 @@ async def handle_request_logging(request: Request, call_next: RequestResponseEnd
 
     request_id = uuid4().hex
     request.state.request_id = request_id
+    request.state.outbound_exchanges = []
     ts_ms = int(time.time() * 1000)
 
     enabled = RequestLogManager.is_enabled()
