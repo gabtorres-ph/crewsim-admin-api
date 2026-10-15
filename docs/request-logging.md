@@ -9,22 +9,25 @@ exchange, including HTTP and transport failures. `logged_async_request` provides
 path for future asynchronous integrations. New outbound integrations must use one of these helpers
 and pass the inbound request ID and exchange collector; direct `httpx` calls are not captured.
 
-The existing background request-log write stores a non-empty exchange list as JSON at
-`req:{request_id}:outbound`, with the same three-day TTL as the inbound log. Reads with
-`include_body=true` return it as the ordered `outbound` field; deletion and expiry remove the key
-with the parent log. `GET /api/utils/request-logs/{request_id}` includes it by default, while the
-list endpoint requires `include_body=true`. These endpoints currently have no application-level
-access check. If Redis is unconfigured or unavailable, outbound logging has no effect on the
-provider call.
+The middleware schedules each captured outbound exchange as an independent item in the existing
+Redis request-log index. Each item has its own `request_id`, `direction: "outbound"`, method,
+timestamp, HTTP status (or `0` for a transport failure), duration, and `url`. The sanitized URL is
+also its searchable `path`; outbound metrics use a fixed key rather than the URL. No parent
+refresh-request ID or new nested `outbound` field is stored. Historical nested records remain
+readable until they expire.
 
-Each exchange records the operation, timestamp, method, safe destination, redacted query, selected
-request and response headers, request and response bodies, status, duration, outcome, and error
-category. URL credentials and fragments are omitted; sensitive query and structured-body keys are
-redacted; only `Accept`, `Content-Type`, and `Content-Length` headers are kept. JSON and form bodies
-are kept in full up to 5 MiB each. Oversized, unreadable, malformed, and unsupported bodies become
-omission markers with a reason and byte count. The Redis value is an inspection record only:
-Telcovision refreshes always call the provider, and no response is replayed from Redis. Compose
-Redis has no disk persistence and can evict records before the three-day TTL.
+Find an item with `GET /api/utils/request-logs`, optionally filtering `path` by the Telcovision
+host or path. `GET /api/utils/request-logs/{request_id}` returns its `response_body` directly from
+the captured provider exchange. The detail endpoint includes bodies by default; the list endpoint
+requires `include_body=true`. These endpoints currently have no application-level access check.
+If Redis is unconfigured or unavailable, outbound logging has no effect on the provider call.
+
+URL credentials and fragments are omitted, sensitive query and structured-response keys are
+redacted, and the token is never stored in the URL. JSON and form response bodies are kept up to
+5 MiB. Oversized, unreadable, malformed, and unsupported bodies become omission markers with a
+reason and byte count. The Redis item is an inspection record only: Telcovision refreshes always
+call the provider, and no response is replayed from Redis. Items expire after three days; Compose
+Redis has no disk persistence and can evict them earlier.
 
 Configuration uses `REDIS_HOST`, `REDIS_PORT`, `REDIS_USERNAME`, and `REDIS_PASSWORD`; an empty
 host disables logging. There is no outbound-specific switch or request-log access key. The rest

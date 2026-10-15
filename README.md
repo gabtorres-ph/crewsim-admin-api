@@ -225,29 +225,30 @@ carry a generic `detail` and never include provider details or secrets:
 > response therefore deletes every account. Review the token's visibility and the production
 > account and eSIM links before enabling the trigger.
 
-#### Outbound exchange inspection
+#### Outbound API log inspection
 
-Every account refresh fetches a live Telcovision response. Redis stores an inspection record of
-the outbound HTTP exchange under `req:{request_id}:outbound` for up to three days; it does not
-serve responses back to account refreshes. To find a record, list
-`GET /api/utils/request-logs?path=/api/accounts/refresh&include_body=true`, then inspect
-`GET /api/utils/request-logs/{request_id}`. The `outbound` field contains the request method,
-destination, redacted query, selected headers, request body, response status and body, duration,
-and outcome. The detail endpoint includes bodies by default; the list endpoint requires
-`include_body=true`. These endpoints currently have no application-level access check.
+Every account refresh fetches a live Telcovision response. The outbound call appears as its own
+item in `GET /api/utils/request-logs`, with `direction: "outbound"`, its own `request_id`, and a
+redacted `url` (also searchable through the `path` filter). It has no parent refresh-request link.
+Open `GET /api/utils/request-logs/{request_id}` for the HTTP status, duration, and the
+`response_body` returned directly by Telcovision. The detail endpoint includes the body by
+default; the list endpoint requires `include_body=true`. These endpoints currently have no
+application-level access check. Older nested `outbound` records remain readable until they expire,
+but new calls are stored as separate items.
 
-The token and other sensitive query or structured-body values are redacted before storage, and
-credential headers are omitted. Each outbound body is stored in full up to 5 MiB; larger,
-unparseable, or unsupported bodies are represented by an omission marker and byte count. Redis
-logging is disabled when `REDIS_HOST` is empty, and Redis failures do not fail the refresh. The
-Compose Redis instance has no disk persistence and may evict records before their three-day TTL.
+The token and other sensitive query or structured-response values are redacted before storage.
+The provider response body is stored up to 5 MiB; larger, unreadable, malformed, or unsupported
+bodies are represented by an omission marker and byte count. Redis keeps each item for up to three
+days. Logging does not serve responses back to account refreshes, and Redis failures do not fail
+the refresh. Logging is disabled when `REDIS_HOST` is empty. The Compose Redis instance has no
+disk persistence and may evict records before their three-day TTL.
 
 Logger `app.integrations.telcovision.*` records the shared `request_id`, operation, host/path,
 duration, HTTP status, and failure category without response bodies or the token-bearing URL.
 The `httpx` logger is held at `WARNING` because it prints the token-bearing URL at `INFO`.
 New outbound integrations should use `logged_request` or `logged_async_request` from
 `app/integrations/outbound_http.py` and pass the inbound request ID and exchange collector so
-their calls appear in the same inspection record.
+their calls can be captured as independent API log items.
 
 Because accounts are now managed by the refresh, the account create (`POST`), update (`PATCH`),
 and delete (`DELETE`) routes return `409`. Account and eSIM read routes are unchanged.
