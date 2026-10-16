@@ -12,7 +12,6 @@ from app.accounts.schemas import (
 )
 from app.common.exceptions import ResourceConflictError, ResourceNotFoundError
 from app.common.manager import TransactionalManager
-from app.esims.resource_access import ESIMResourceAccess
 
 TELCOVISION_MANAGED_MESSAGE = "Accounts are managed by Telcovision"
 
@@ -21,7 +20,6 @@ class AccountManager(TransactionalManager):
     def __init__(self, session: Session) -> None:
         super().__init__(session)
         self.accounts = AccountResourceAccess(session)
-        self.esims = ESIMResourceAccess(session)
 
     def refresh_accounts(
         self, fetch_snapshot: Callable[[], list[AccountSnapshot]]
@@ -34,7 +32,6 @@ class AccountManager(TransactionalManager):
             snapshot = fetch_snapshot()
             created, updated, unchanged = self.accounts.upsert_snapshot(snapshot)
             missing_ids = self.accounts.list_missing_ids({item.id for item in snapshot})
-            delinked = self.esims.delink_accounts(missing_ids)
             deleted = self.accounts.delete_ids(missing_ids)
             return AccountRefreshResult(
                 fetched=len(snapshot),
@@ -42,7 +39,6 @@ class AccountManager(TransactionalManager):
                 updated=updated,
                 unchanged=unchanged,
                 deleted=deleted,
-                delinked_esims=delinked,
             )
 
         return self._write(

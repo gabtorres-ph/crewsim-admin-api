@@ -223,8 +223,9 @@ curl --request POST \
 ```
 
 The operation is synchronous: the request returns only after the provider call and database
-changes finish, and a successful `200` response reports the committed counts. Error responses
-carry a generic `detail` and never include provider details or secrets:
+changes finish. A successful `200` response reports the committed `fetched`, `created`,
+`updated`, `unchanged`, and `deleted` account counts. Error responses carry a generic `detail`
+and never include provider details or secrets:
 
 | Status | Meaning |
 | ------ | ------- |
@@ -234,10 +235,11 @@ carry a generic `detail` and never include provider details or secrets:
 
 > [!WARNING]
 > The refresh treats the provider response as the complete account list. Local account IDs that
-> are absent from it are **deleted**, and any eSIMs linked to them are kept but delinked
-> (`account_id` becomes null and `use_account_for_charging` becomes false). An empty successful
-> response therefore deletes every account. Review the token's visibility and the production
-> account and eSIM links before enabling the trigger.
+> are absent from it are **deleted**. eSIMs retain their `account_id` and
+> `use_account_for_charging` values, even when the referenced account no longer exists. An empty
+> successful response therefore deletes every account without changing eSIMs. Apply migration
+> `c9e6f4a2b718` before deploying this refresh behavior, and review the token's visibility and
+> production account IDs before enabling the trigger.
 
 #### Outbound API log inspection
 

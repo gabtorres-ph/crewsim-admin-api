@@ -54,4 +54,3 @@ class AccountRefreshResult(BaseModel):
     updated: int = Field(ge=0)
     unchanged: int = Field(ge=0)
     deleted: int = Field(ge=0)
-    delinked_esims: int = Field(ge=0)

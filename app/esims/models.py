@@ -1,9 +1,8 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.accounts.models import Account
 from app.database import Base
 from app.users.models import User
 
@@ -13,7 +12,7 @@ class ESIM(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     userid: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
-    accountid: Mapped[int | None] = mapped_column(ForeignKey("accounts.id"), nullable=True)
+    accountid: Mapped[int | None] = mapped_column(Integer, nullable=True)
     imsi: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     isesim: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
@@ -28,4 +27,3 @@ class ESIM(Base):
     imei_device: Mapped[str | None] = mapped_column(String(255), nullable=True)
     allow_data: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     user: Mapped[User | None] = relationship(back_populates="esims")
-    account: Mapped[Account | None] = relationship(back_populates="esims")

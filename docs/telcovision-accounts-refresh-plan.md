@@ -1,5 +1,11 @@
 # Plan: Refresh accounts from Telcovision
 
+> [!NOTE]
+> This is the original implementation plan. Its eSIM delinking steps and six-count refresh
+> response were superseded by migration `c9e6f4a2b718` and the subsequent refresh changes.
+> Refresh now leaves eSIM `account_id` and `use_account_for_charging` values intact when deleting
+> accounts and returns five account counts. See the [current operating instructions](../README.md#telcovision-account-refresh).
+
 ## Context
 
 Telcovision is the source of truth for account data. The application's `accounts.id` is the
