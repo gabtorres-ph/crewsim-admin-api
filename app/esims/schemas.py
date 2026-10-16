@@ -23,6 +23,16 @@ class ESIMCreate(BaseModel):
     imei: IMSIString | None = None
     imei_device: IMSIString | None = None
     allow_data: bool | None = None
+    mobileplanid: int | None = None
+    activationdate: datetime | None = None
+    lastusagedate: datetime | None = None
+    subscriber_status: IMSIString | None = None
+    lastnetworkdate: datetime | None = None
+    lastmcc: IMSIString | None = None
+    lastmnc: IMSIString | None = None
+    lastcellid: int | None = None
+    lastlac: int | None = None
+    lastrat: IMSIString | None = None
 
     model_config = ConfigDict(str_strip_whitespace=True)
 
@@ -43,6 +53,16 @@ class ESIMUpdate(BaseModel):
     imei: IMSIString | None = None
     imei_device: IMSIString | None = None
     allow_data: bool | None = None
+    mobileplanid: int | None = None
+    activationdate: datetime | None = None
+    lastusagedate: datetime | None = None
+    subscriber_status: IMSIString | None = None
+    lastnetworkdate: datetime | None = None
+    lastmcc: IMSIString | None = None
+    lastmnc: IMSIString | None = None
+    lastcellid: int | None = None
+    lastlac: int | None = None
+    lastrat: IMSIString | None = None
 
     model_config = ConfigDict(str_strip_whitespace=True)
 
@@ -62,6 +82,16 @@ class ESIMUpdate(BaseModel):
         "imei",
         "imei_device",
         "allow_data",
+        "mobileplanid",
+        "activationdate",
+        "lastusagedate",
+        "subscriber_status",
+        "lastnetworkdate",
+        "lastmcc",
+        "lastmnc",
+        "lastcellid",
+        "lastlac",
+        "lastrat",
     )
     @classmethod
     def reject_null(cls, value: int | str | None) -> int | str:
@@ -87,5 +117,15 @@ class ESIMRead(BaseModel):
     imei: str | None
     imei_device: str | None
     allow_data: bool | None
+    mobileplanid: int | None
+    activationdate: datetime | None
+    lastusagedate: datetime | None
+    subscriber_status: str | None
+    lastnetworkdate: datetime | None
+    lastmcc: str | None
+    lastmnc: str | None
+    lastcellid: int | None
+    lastlac: int | None
+    lastrat: str | None
 
     model_config = ConfigDict(from_attributes=True)
