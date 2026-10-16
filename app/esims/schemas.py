@@ -129,3 +129,48 @@ class ESIMRead(BaseModel):
     lastrat: str | None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ESIMSnapshot(BaseModel):
+    imsi: IMSIString = Field(pattern=r"^[0-9]{5,15}$")
+    account_id: int = Field(gt=0, strict=True)
+    isesim: bool = Field(strict=True)
+    balance: float | None = Field(default=None, allow_inf_nan=False)
+    use_account_for_charging: bool = Field(strict=True)
+    smdpserver: IMSIString | None = None
+    activationcode: IMSIString | None = None
+    allow_data: bool = Field(strict=True)
+    mobileplanid: int | None = Field(default=None, gt=0, strict=True)
+    activationdate: datetime | None = None
+    lastusagedate: datetime | None = None
+    subscriber_status: IMSIString | None = None
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+
+class ESIMRefreshResult(BaseModel):
+    # this schema will be reused for the listSubscribers and
+    # getSingleSubcriber call to telcovision
+    id: int
+    imsi: str
+    account_id: int | None = Field(default=None, validation_alias="accountid")
+    isesim: bool | None = None
+    balance: float | None = None
+    use_account_for_charging: bool | None = None
+    smdpserver: str | None = None
+    activationcode: str | None = None
+    allow_data: bool | None = None
+    mobileplanid: int | None = None
+    activationdate: datetime | None = None
+    lastusagedate: datetime | None = None
+    subscriber_status: str | None = None
+    lastnetworkdate: datetime | None = None
+    lastmcc: str | None = None
+    lastmnc: str | None = None
+    lastcellid: int | None = None
+    lastlac: int | None = None
+    imei: str | None = None
+    imei_device: str | None = None
+    lastrat: str | None = None
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)

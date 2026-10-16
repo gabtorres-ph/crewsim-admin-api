@@ -1,10 +1,12 @@
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from urllib.parse import urlsplit
 
 import httpx
 
+from app.config import Settings
 from app.integrations.outbound_http import logged_request
 from app.integrations.redis.outbound_logging import OutboundExchange
 
@@ -22,6 +24,10 @@ def build_http_client() -> httpx.Client:
     return httpx.Client(
         timeout=httpx.Timeout(READ_TIMEOUT_SECONDS, connect=CONNECT_TIMEOUT_SECONDS)
     )
+
+
+class TelcovisionNotConfiguredError(Exception):
+    """The provider URL or token is missing from the environment."""
 
 
 class TelcovisionError(Exception):
@@ -198,3 +204,30 @@ class TelcovisionClient:
         validate: Callable[[dict[str, object]], object] | None = None,
     ) -> dict[str, object]:
         return self._request("listResellerAccount", {}, validate=validate)
+
+    def list_subscribers(
+        self,
+        account_id: int,
+        *,
+        validate: Callable[[dict[str, object]], object] | None = None,
+    ) -> dict[str, object]:
+        """Request subscribers for one account through the shared transport."""
+        return self._request("listSubscriber", {"accountId": str(account_id)}, validate=validate)
+
+
+@contextmanager
+def open_telcovision_client(
+    settings: Settings,
+    *,
+    request_id: str,
+    outbound_exchanges: list[OutboundExchange],
+) -> Iterator[TelcovisionClient]:
+    """Check provider credentials and close the bounded HTTP client after use."""
+    api_url = settings.telcovision_api_url
+    token = settings.telcovision_api_token.get_secret_value()
+    if not api_url or not token:
+        logger.error("Telcovision refresh not configured request_id=%s", request_id)
+        raise TelcovisionNotConfiguredError
+
+    with build_http_client() as http_client:
+        yield TelcovisionClient(api_url, token, http_client, request_id, outbound_exchanges)

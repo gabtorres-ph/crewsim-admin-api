@@ -1,59 +1,28 @@
 import logging
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, ValidationError
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.accounts.manager import AccountManager
 from app.accounts.schemas import AccountRefreshResult, AccountSnapshot
 from app.config import Settings
 from app.integrations.redis.outbound_logging import OutboundExchange
+# TODO import TelcovisionNotConfiguredError from client in app/accounts/routes.py and drop
+# this re-export (ruff PLC0414); also run ruff --fix for the unsorted imports (I001)
 from app.integrations.telcovision.client import (
-    TelcovisionClient,
     TelcovisionError,
-    build_http_client,
+    TelcovisionNotConfiguredError as TelcovisionNotConfiguredError,
+    open_telcovision_client,
 )
+from app.integrations.telcovision.schemas import TelcovisionAccountsResponse
 
 logger = logging.getLogger(__name__)
-
-
-class TelcovisionNotConfiguredError(Exception):
-    """The provider URL or token is missing from the environment."""
-
-
-class _ProviderAccount(BaseModel):
-    # Undocumented provider fields are ignored; the fields we store are strictly typed.
-    model_config = ConfigDict(extra="ignore", populate_by_name=True)
-
-    id: StrictInt = Field(gt=0)
-    name: str
-    balance: float = Field(allow_inf_nan=False)
-    package_only: StrictBool = Field(alias="packageOnly")
-    steering_list_id: StrictInt | None = Field(default=None, alias="steeringListId")
-
-
-class _ProviderReseller(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    id: StrictInt = Field(gt=0)
-    account: list[_ProviderAccount]
-
-
-class _ProviderAccountList(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    reseller: list[_ProviderReseller]
-
-
-class _ProviderResponse(BaseModel):
-    model_config = ConfigDict(extra="ignore", populate_by_name=True)
-
-    list_reseller_account: _ProviderAccountList = Field(alias="listResellerAccount")
 
 
 def parse_account_snapshot(payload: dict[str, object]) -> list[AccountSnapshot]:
     """Flatten a full listResellerAccount response; any invalid element rejects the whole snapshot."""
     try:
-        response = _ProviderResponse.model_validate(payload)
+        response = TelcovisionAccountsResponse.model_validate(payload)
         snapshots = [
             AccountSnapshot(
                 id=account.id,
@@ -83,25 +52,20 @@ def refresh_telcovision_accounts(
     outbound_exchanges: list[OutboundExchange],
 ) -> AccountRefreshResult:
     """Fetch a live Telcovision account snapshot and mirror it into the accounts table."""
-    api_url = settings.telcovision_api_url
-    token = settings.telcovision_api_token.get_secret_value()
-    if not api_url or not token:
-        logger.error("Telcovision refresh not configured request_id=%s", request_id)
-        raise TelcovisionNotConfiguredError
+    with open_telcovision_client(
+        settings, request_id=request_id, outbound_exchanges=outbound_exchanges
+    ) as client:
+        logger.info("Telcovision accounts refresh started request_id=%s", request_id)
 
-    logger.info("Telcovision accounts refresh started request_id=%s", request_id)
+        def load_snapshot() -> list[AccountSnapshot]:
+            snapshots = parse_account_snapshot(
+                client.list_reseller_accounts(validate=parse_account_snapshot)
+            )
+            logger.info(
+                "Telcovision accounts snapshot parsed request_id=%s accounts=%d",
+                request_id,
+                len(snapshots),
+            )
+            return snapshots
 
-    def load_snapshot() -> list[AccountSnapshot]:
-        snapshots = parse_account_snapshot(
-            client.list_reseller_accounts(validate=parse_account_snapshot)
-        )
-        logger.info(
-            "Telcovision accounts snapshot parsed request_id=%s accounts=%d",
-            request_id,
-            len(snapshots),
-        )
-        return snapshots
-
-    with build_http_client() as http_client:
-        client = TelcovisionClient(api_url, token, http_client, request_id, outbound_exchanges)
         return AccountManager(session).refresh_accounts(load_snapshot)

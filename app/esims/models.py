@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -9,6 +9,7 @@ from app.users.models import User
 
 class ESIM(Base):
     __tablename__ = "esims"
+    __table_args__ = (UniqueConstraint("imsi", name="uq_esims_imsi"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     userid: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)

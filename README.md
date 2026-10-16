@@ -273,6 +273,83 @@ their calls can be captured as independent API log items.
 Because accounts are now managed by the refresh, the account create (`POST`), update (`PATCH`),
 and delete (`DELETE`) routes return `409`. Account and eSIM read routes are unchanged.
 
+### Telcovision subscriber refresh
+
+`POST /api/esims/refresh?account_id=<account_id>` synchronizes one Telcovision account's
+subscribers into local eSIMs. `account_id` is required and must identify an existing local
+account. The request uses the existing `TELCOVISION_API_URL` and `TELCOVISION_API_TOKEN`
+settings, sends `{"listSubscriber": {"accountId": "<account_id>"}}` to Telcovision, and
+commits all inserts and updates in one transaction. It returns a `list[ESIMRefreshResult]`
+containing the persisted eSIM values in snapshot order.
+
+Apply migration `a2f7c9d4e681` before using this pipeline. It adds `uq_esims_imsi` and stops with
+resolution instructions if existing records share an IMSI. Resolve those duplicates explicitly
+and rerun the migration; it never deletes or merges records. Use the migration commands in
+the local development or Compose instructions above.
+
+Invoke the synchronous callable from an internal Python caller with a dedicated database
+session:
+
+```python
+from uuid import uuid4
+
+from app.config import get_settings
+from app.database import SessionLocal
+from app.integrations.redis.outbound_logging import OutboundExchange
+from app.integrations.telcovision.subscribers import refresh_telcovision_subscribers
+
+exchanges: list[OutboundExchange] = []
+account_id = ...
+with SessionLocal() as session:
+    results = refresh_telcovision_subscribers(
+        session,
+        get_settings(),
+        account_id=account_id,
+        request_id=uuid4().hex,
+        outbound_exchanges=exchanges,
+    )
+```
+
+When invoking it from a request handler, pass `request.state.request_id` and
+`request.state.outbound_exchanges` so the existing middleware persists the outbound exchange.
+In the standalone example, exchanges remain in the caller's in-memory list.
+
+The endpoint returns 422 when `account_id` is missing, zero, negative, or not an integer; 404
+when the account does not exist locally; 502 for Telcovision transport, provider, or response
+errors; and 503 when Telcovision configuration is missing. It has no refresh key.
+
+Each `imsiList[].imsi` produces one eSIM snapshot. The pipeline matches local records by IMSI
+and updates these fields:
+
+| Telcovision value | eSIM attribute |
+| ----------------- | -------------- |
+| `imsiList[].imsi` | `imsi` (synchronization key) |
+| `accountId` | `accountid` (`account_id` in results) |
+| `sim.esim` | `isesim` |
+| `balance` | `balance` |
+| `useAccountForCharging` | `use_account_for_charging` |
+| `sim.smdpServer` | `smdpserver` |
+| `sim.activationCode` | `activationcode` |
+| `allowedData` | `allow_data` |
+| `mobilePlanId` | `mobileplanid` |
+| `activationDate` | `activationdate` |
+| `lastUsageDate` | `lastusagedate` |
+| `status[].status` for the highest numeric `status[].id` | `subscriber_status` |
+
+New eSIMs receive a generated local numeric ID, `userid=None`, and a random seven-character
+token containing lowercase ASCII letters and digits. Existing records keep their user,
+token, name, and unrelated device/network fields. Missing nullable provider values clear the
+corresponding mapped fields; an empty status history sets `subscriber_status=None`. Local
+IMSIs absent from the response are left alone, and a valid empty subscriber list changes
+nothing. No eSIMs are deleted. Account IDs can be stored before their accounts are refreshed.
+
+Pagination is deferred: `hasMore: true` or an `nbFound` value that differs from the subscriber
+list length raises `TelcovisionError("incomplete_response")` before any writes. Duplicate IMSIs
+raise `TelcovisionError("duplicate_imsi")`; malformed records raise
+`TelcovisionError("invalid_response")`. Fetch, parsing, and persistence failures roll back the
+refresh; database integrity failures become `ResourceConflictError`. The bounded HTTP client
+closes on success or failure. Run subscriber refreshes sequentially; refresh locking is deferred.
+
 ## Build and run the API image directly
 
 When PostgreSQL is managed separately, build the same image and pass a database URL reachable

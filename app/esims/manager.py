@@ -1,13 +1,14 @@
+from collections.abc import Callable
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.accounts.resource_access import AccountResourceAccess
-from app.common.exceptions import ResourceNotFoundError
+from app.common.exceptions import InvalidOperationError, ResourceNotFoundError
 from app.common.manager import TransactionalManager
 from app.esims.models import ESIM
 from app.esims.resource_access import ESIMResourceAccess
-from app.esims.schemas import ESIMCreate, ESIMUpdate
+from app.esims.schemas import ESIMCreate, ESIMRefreshResult, ESIMSnapshot, ESIMUpdate
 from app.users.resource_access import UserResourceAccess
 
 
@@ -17,6 +18,25 @@ class ESIMManager(TransactionalManager):
         self.esims = ESIMResourceAccess(session)
         self.users = UserResourceAccess(session)
         self.accounts = AccountResourceAccess(session)
+
+    def refresh_esims(
+        self, account_id: int, fetch_snapshot: Callable[[], list[ESIMSnapshot]]
+    ) -> list[ESIMRefreshResult]:
+        """Refresh eSIMs for an existing account in one transaction."""
+
+        def operation() -> list[ESIMRefreshResult]:
+            self._require_account(account_id)
+            snapshots = fetch_snapshot()
+            # TODO duplicates are already rejected by parse_subscriber_snapshot (502); decide
+            # whether to keep this check for other callers and align the error it returns
+            if len({snapshot.imsi for snapshot in snapshots}) != len(snapshots):
+                raise InvalidOperationError("The eSIM refresh snapshot contains duplicate IMSIs")
+            esims = self.esims.upsert_snapshot(snapshots)
+            return [ESIMRefreshResult.model_validate(esim) for esim in esims]
+
+        return self._write(
+            operation, conflict_message="The eSIM refresh conflicts with existing database data"
+        )
 
     def create_esim(self, data: ESIMCreate) -> ESIM:
         values = data.model_dump()

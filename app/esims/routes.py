@@ -1,17 +1,23 @@
+import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Path, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.accounts.manager import AccountManager
+from app.config import Settings, get_settings
 from app.database import get_db
 from app.esims.manager import ESIMManager
-from app.esims.schemas import ESIMCreate, ESIMRead, ESIMUpdate
+from app.esims.schemas import ESIMCreate, ESIMRead, ESIMRefreshResult, ESIMUpdate
+from app.integrations.telcovision.client import TelcovisionError, TelcovisionNotConfiguredError
+from app.integrations.telcovision.subscribers import refresh_telcovision_subscribers
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/esims", tags=["esims"])
 account_router = APIRouter(prefix="/accounts", tags=["accounts"])
 user_router = APIRouter(prefix="/users", tags=["users"])
 DatabaseSession = Annotated[Session, Depends(get_db)]
+AppSettings = Annotated[Settings, Depends(get_settings)]
 
 
 @router.post("", response_model=ESIMRead, status_code=status.HTTP_201_CREATED)
@@ -27,6 +33,42 @@ def list_esims(
     limit: Annotated[int, Query(ge=1, le=100)] = 100,
 ) -> list[ESIMRead]:
     return ESIMManager(db).list_esims(user_id=user_id, offset=offset, limit=limit)
+
+
+@router.post("/refresh", response_model=list[ESIMRefreshResult])
+def refresh_esims(
+    request: Request,
+    db: DatabaseSession,
+    settings: AppSettings,
+    account_id: Annotated[int, Query(gt=0)],
+) -> list[ESIMRefreshResult]:
+    try:
+        return refresh_telcovision_subscribers(
+            db,
+            settings,
+            account_id=account_id,
+            request_id=request.state.request_id,
+            outbound_exchanges=request.state.outbound_exchanges,
+        )
+    except TelcovisionNotConfiguredError:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "eSIM refresh is not configured"
+        ) from None
+    except TelcovisionError as error:
+        logger.warning(
+            "Telcovision eSIM refresh failed account_id=%s category=%s provider_code=%s",
+            account_id,
+            error.category,
+            error.provider_code,
+        )
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            {
+                "message": "Telcovision eSIM refresh failed",
+                "category": error.category,
+                "provider_code": error.provider_code,
+            },
+        ) from None
 
 
 @router.get("/{esim_id}", response_model=ESIMRead)
