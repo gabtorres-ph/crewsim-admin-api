@@ -1,8 +1,8 @@
 # Core CrewSim Architecture
 
 Core CrewSim is organized as a vertical-domain FastAPI application. Each business domain owns
-its HTTP routes, request and response schemas, business rules, persistence operations, database
-models, and tests. Shared application infrastructure remains at the top of `app/` or in
+its HTTP routes, request and response schemas, business rules, persistence operations, and database
+models. Shared application infrastructure remains at the top of `app/` or in
 `app/common/`.
 
 ## Source tree
@@ -21,25 +21,19 @@ core-crewsim/
 │   │   ├── cors.py
 │   │   ├── exceptions.py
 │   │   ├── manager.py         # Shared transaction behavior
-│   │   ├── resource_access.py # Shared CRUD persistence behavior
-│   │   └── test_cors.py
+│   │   └── resource_access.py # Shared CRUD persistence behavior
 │   ├── accounts/
 │   │   ├── __init__.py
 │   │   ├── models.py
 │   │   ├── schemas.py
 │   │   ├── resource_access.py
 │   │   ├── manager.py
-│   │   ├── routes.py
-│   │   └── test_accounts.py
+│   │   └── routes.py
 │   ├── users/                      # Same domain file layout
 │   ├── esims/                      # Same domain file layout
 │   ├── favorites/                  # Same domain file layout
 │   ├── packages/                   # Same domain file layout
-│   ├── usage/                      # Same domain file layout
-│   ├── test_architecture.py
-│   ├── test_config.py
-│   ├── test_main.py
-│   └── test_seed.py
+│   └── usage/                      # Same domain file layout
 ├── migrations/
 │   ├── env.py
 │   ├── script.py.mako
@@ -47,16 +41,12 @@ core-crewsim/
 ├── docs/
 │   ├── architecture.md
 │   └── architecture-reorganization-plan.md
-├── conftest.py                         # Shared pytest fixtures
 ├── Dockerfile
 ├── compose.yaml
 ├── alembic.ini
 ├── pyproject.toml
 └── README.md
 ```
-
-Tests are colocated with the application component they exercise. Build and Docker exclusions
-keep `test_*.py` and the root `conftest.py` out of production artifacts.
 
 ## Dependency rules
 
@@ -91,8 +81,7 @@ the URL begins with a different resource. For example, the eSIM domain owns
 OpenAPI tag.
 
 All domain model modules must be imported before using `Base.metadata` for schema creation or
-migration comparison. Alembic does this in `migrations/env.py`, and pytest does it in the root
-`conftest.py`.
+migration comparison. Alembic does this in `migrations/env.py`.
 
 ## Adding a domain
 
@@ -104,13 +93,10 @@ Create `app/<domain>/` with these files:
 - `resource_access.py`
 - `manager.py`
 - `routes.py`
-- `test_<domain>.py`
 
 Keep each layer within the dependency direction above. Register the domain router in
-`app/routes.py`, and import its model module in both `migrations/env.py` and `conftest.py` so
-Alembic and tests see its tables. Put nested routes in this package when the new domain owns the
-resource they return. Add application-level tests only when behavior belongs to composition,
-configuration, seeding, or an architecture rule rather than to one domain.
+`app/routes.py`, and import its model module in `migrations/env.py` so Alembic sees its tables.
+Put nested routes in this package when the new domain owns the resource they return.
 
 When an external service is introduced, place its adapter in `app/integrations/<provider>/` and
 keep provider-specific details out of domain modules. When a distinct API surface is introduced,
@@ -132,6 +118,6 @@ webhooks/<provider>.py → integrations/<provider>/mapper.py → <domain>/manage
 - `app/integrations/<provider>/mapper.py` turns a provider event into the domain's create schema
   and stores the received body unchanged in the notification `payload`.
 - Domain packages such as `app/sim_notifications/` never import `app.integrations` or
-  `app.webhooks`; `app/test_architecture.py` enforces this.
+  `app.webhooks`.
 - Webhooks acknowledge with `200 {"status": "ok"}`. They are currently unauthenticated; request
   verification belongs on the provider router as a dependency.

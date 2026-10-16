@@ -30,7 +30,7 @@ services:
       POSTGRES_DB: "${DB_DATABASE:-${POSTGRES_DB:-core_crewsim}}"
       POSTGRES_USER: "${DB_USERNAME:-${POSTGRES_USER:-postgres}}"
       POSTGRES_PASSWORD: "${DB_PASSWORD:-${POSTGRES_PASSWORD:-postgres}}"
-    # Host access for local tools and pytest; 5433 avoids a host-installed PostgreSQL.
+    # Host access for local tools; 5433 avoids a host-installed PostgreSQL.
     ports:
       - "127.0.0.1:${DB_HOST_PORT:-5433}:5432"
     volumes:
@@ -81,7 +81,7 @@ services:
 
   api:
     <<: *app-service
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-proxy-headers"]
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
     ports:
       - "${APP_PORT:-8000}:8000"
     depends_on:

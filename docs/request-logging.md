@@ -1,6 +1,6 @@
 # Request Logging (Redis-backed)
 
-## Current CrewSim outbound inspection
+## Current CrewSim request-log inspection
 
 The request-logging middleware assigns an ID to each inbound request and initializes
 `request.state.outbound_exchanges`. Telcovision passes both values to `logged_request` in
@@ -17,15 +17,19 @@ refresh-request ID or new nested `outbound` field is stored. Historical nested r
 readable until they expire.
 
 Find an item with `GET /api/utils/request-logs`, optionally filtering `path` by the Telcovision
-host or path. `GET /api/utils/request-logs/{request_id}` returns its `response_body` directly from
-the captured provider exchange. The detail endpoint includes bodies by default; the list endpoint
-requires `include_body=true`. These endpoints currently have no application-level access check.
-If Redis is unconfigured or unavailable, outbound logging has no effect on the provider call.
+host or path. Both this list endpoint and `GET /api/utils/request-logs/{request_id}` include
+captured bodies by default for inbound and outbound entries: `body` is the request body and
+`response_body` is the response body. Pass `include_body=false` to either endpoint to skip loading
+body content. These endpoints currently have no application-level access check. If Redis is
+unconfigured or unavailable, outbound logging has no effect on the provider call.
 
-URL credentials and fragments are omitted, sensitive query and structured-response keys are
-redacted, and the token is never stored in the URL. JSON and form response bodies are kept up to
-5 MiB. Oversized, unreadable, malformed, and unsupported bodies become omission markers with a
-reason and byte count. The Redis item is an inspection record only: Telcovision refreshes always
+URL credentials and fragments are omitted, sensitive query and structured-body keys are
+redacted, and the token is never stored in the URL. Inbound request and response bodies have a
+32 KiB storage cap; binary and multipart bodies are omitted. Inbound plain text and XML are not
+redacted. Outbound JSON and form request and response bodies are kept up to 5 MiB each. Oversized,
+unreadable, malformed, and unsupported outbound bodies become omission markers with a reason and
+byte count. Existing standalone outbound entries are not backfilled, so their top-level `body`
+field remains empty. The Redis item is an inspection record only: Telcovision refreshes always
 call the provider, and no response is replayed from Redis. Items expire after three days; Compose
 Redis has no disk persistence and can evict them earlier.
 
@@ -45,9 +49,18 @@ Source files:
 | `app/main.py` | Registers the middleware; init/cleanup/close on startup/shutdown |
 | `app/utils/routes.py` | Inspection endpoints under `/api/utils/request-logs` |
 | `app/utils/schemas.py` | `RequestLogEntry`, `RequestLogMetricsResponse` response models |
-| `app/integrations/redis/test_request_logging.py` | Unit tests with a fake Redis client |
 
 ---
+
+### Caller IP fields
+
+`caller_ip`, `caller_ip_source`, and `client_ip_candidates` are set by
+`app/integrations/redis/client_ip.py` and shared by an inbound request and its outbound items. Only
+globally reachable IPs are kept, from the supported headers (priority order in the README) and then
+the socket peer. Values are reported, not verified: a caller can spoof any header, so do not use
+them for access control. Limits: 16 values per header, 2 KiB per value, 31 header candidates plus
+one socket candidate; no raw header text is stored. Entries written before this change have no
+source and decode with `caller_ip_source: ""` and `client_ip_candidates: []`.
 
 ## Historical porting reference
 
@@ -327,7 +340,9 @@ All keys get `EXPIRE 259200` (3 days) on every write.
 |---|---|---|
 | `ts` | `1759400000000` | epoch ms |
 | `timestamp` | `2025-10-02T10:13:20+00:00` | ISO-8601 UTC |
-| `caller_ip` | `203.0.113.7` | |
+| `caller_ip` | `203.0.113.7` | first public candidate, reported not verified; `""` when none |
+| `caller_ip_source` | `cf-connecting-ip` | lowercased header name or `socket`; `""` when none |
+| `client_ip_candidates` | `[{"source":"socket","ip":"203.0.113.7"}]` | compact JSON of every public candidate, in priority order |
 | `user_id` | `42` / `anonymous` | |
 | `method` | `POST` | |
 | `path` | `/api/accounts/current (login)` | normalized route template; the raw URL path (max 256 chars) when no route matched |
@@ -422,7 +437,7 @@ All are `GET`, require an **admin user**, return **503** if logging is disabled,
 | `user_id` | str | — | use the per-user index |
 | `path` | str | — | case-insensitive substring; switches to `get_requests_matching_path` |
 | `from` / `to` | ISO-8601 datetime | — | inclusive range on `ts` |
-| `include_body` | bool | `false` | include decoded `body` and `response_body` |
+| `include_body` | bool | `false` in the original system; `true` in CrewSim | include decoded `body` and `response_body` |
 | `page` | int ≥ 1 | 1 | |
 | `limit` | 1–1000 | `DEFAULT_PAGE_LIMIT` | |
 | `page_size` | 1–1000 | — | alias for `limit`; takes precedence |
@@ -446,6 +461,8 @@ class RequestLogEntry(BaseModel):
     ts: int
     timestamp: Optional[str] = None
     caller_ip: str
+    caller_ip_source: str = ""
+    client_ip_candidates: list[ClientIpCandidate] = []
     user_id: str
     method: str
     path: str

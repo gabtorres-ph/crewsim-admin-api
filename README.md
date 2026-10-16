@@ -244,15 +244,19 @@ carry a generic `detail` and never include provider details or secrets:
 Every account refresh fetches a live Telcovision response. The outbound call appears as its own
 item in `GET /api/utils/request-logs`, with `direction: "outbound"`, its own `request_id`, and a
 redacted `url` (also searchable through the `path` filter). It has no parent refresh-request link.
-Open `GET /api/utils/request-logs/{request_id}` for the HTTP status, duration, and the
-`response_body` returned directly by Telcovision. The detail endpoint includes the body by
-default; the list endpoint requires `include_body=true`. These endpoints currently have no
-application-level access check. Older nested `outbound` records remain readable until they expire,
-but new calls are stored as separate items.
+Both the list endpoint and `GET /api/utils/request-logs/{request_id}` include captured bodies by
+default for inbound and outbound entries: `body` is the request body, and `response_body` is the
+response body. Pass `include_body=false` to skip loading body content. The detail endpoint also
+shows the HTTP status and duration. These endpoints currently have no application-level access
+check. Older nested `outbound` records remain readable until they expire, but new calls are stored
+as separate items.
 
-The token and other sensitive query or structured-response values are redacted before storage.
-The provider response body is stored up to 5 MiB; larger, unreadable, malformed, or unsupported
-bodies are represented by an omission marker and byte count. Redis keeps each item for up to three
+The token and other sensitive query or structured-body values are redacted before storage.
+Inbound request and response bodies have a 32 KiB storage cap; binary and multipart bodies are
+omitted. Inbound plain text and XML are not redacted. Outbound JSON and form request and response
+bodies are stored up to 5 MiB each; larger, unreadable, malformed, or unsupported bodies become
+an omission marker with a reason and byte count. Existing standalone outbound entries are not
+backfilled, so their top-level `body` field remains empty. Redis keeps each item for up to three
 days. Logging does not serve responses back to account refreshes, and Redis failures do not fail
 the refresh. Logging is disabled when `REDIS_HOST` is empty. The Compose Redis instance has no
 disk persistence and may evict records before their three-day TTL.
@@ -328,24 +332,12 @@ UV bootstrap; manage project packages with UV after that.
 ## Development checks
 
 ```bash
-# Confirm every colocated test is discovered once
-uv run --active pytest --collect-only
-
-# Run tests and lint checks
-uv run --active pytest
+# Run lint checks
 uv run --active ruff check .
 
 # Build and inspect production package artifacts
 uv build
 ```
-
-Tests run against PostgreSQL. Start the Compose database with `docker compose up -d db`; it is
-published on `127.0.0.1:${DB_HOST_PORT:-5433}`. The suite connects with `TEST_DATABASE_URL`,
-creates that database on first run, and rolls back each test's transaction. With
-`pytest -n <workers>`, each xdist worker uses its own `<database>_gw<N>` database.
-
-Tests live beside their owning modules under `app/`; shared fixtures live in `conftest.py`.
-Production package and Docker builds exclude the colocated test modules and `conftest.py`.
 
 ## TODOs
 
