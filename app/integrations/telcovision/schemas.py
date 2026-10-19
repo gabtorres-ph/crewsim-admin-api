@@ -120,6 +120,38 @@ class TelcovisionListedSubscriber(TelcovisionResponseModel):
     last_usage_date: datetime | None = Field(default=None, alias="lastUsageDate")
 
 
+class TelcovisionSubscriberNetworkInfo(TelcovisionResponseModel):
+    time: datetime | None = None
+    last_mcc: int | str | None = Field(default=None, alias="lastMcc")
+    last_mnc: int | str | None = Field(default=None, alias="lastMnc")
+    last_cell_id: StrictInt | None = Field(default=None, alias="lastCellId")
+    last_lac: StrictInt | None = Field(default=None, alias="lastLac")
+    last_imei: str | None = Field(default=None, alias="lastImei", max_length=255)
+    last_rat: str | None = Field(default=None, alias="lastRat", max_length=255)
+    model: str | None = Field(default=None, max_length=255)
+
+
+class TelcovisionSingleSubscriber(TelcovisionResponseModel):
+    imsi_list: list[TelcovisionSubscriberImsi] | None = Field(default=None, alias="imsiList")
+    status: list[TelcovisionSubscriberStatus] | None = None
+    account_id: StrictInt | None = Field(default=None, alias="accountId", gt=0)
+    balance: float | None = Field(default=None, allow_inf_nan=False)
+    use_account_for_charging: StrictBool | None = Field(
+        default=None, alias="useAccountForCharging"
+    )
+    allowed_data: StrictBool | None = Field(default=None, alias="allowedData")
+    mobile_plan_id: StrictInt | None = Field(default=None, alias="mobilePlanId", gt=0)
+    activation_date: datetime | None = Field(default=None, alias="activationDate")
+    last_usage_date: datetime | None = Field(default=None, alias="lastUsageDate")
+    network_info: TelcovisionSubscriberNetworkInfo | None = Field(
+        default=None, alias="networkInfo"
+    )
+
+
+class TelcovisionSingleSubscriberResponse(TelcovisionResponseModel):
+    get_single_subscriber: TelcovisionSingleSubscriber = Field(alias="getSingleSubscriber")
+
+
 class TelcovisionSubscriberList(TelcovisionResponseModel):
     subscriber_list: list[TelcovisionListedSubscriber] = Field(alias="subscriberList")
     has_more: StrictBool = Field(alias="hasMore")

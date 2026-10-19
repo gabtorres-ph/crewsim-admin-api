@@ -10,7 +10,10 @@ from app.database import get_db
 from app.esims.manager import ESIMManager
 from app.esims.schemas import ESIMCreate, ESIMRead, ESIMRefreshResult, ESIMUpdate
 from app.integrations.telcovision.client import TelcovisionError, TelcovisionNotConfiguredError
-from app.integrations.telcovision.subscribers import refresh_telcovision_subscribers
+from app.integrations.telcovision.subscribers import (
+    refresh_telcovision_subscriber,
+    refresh_telcovision_subscribers,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/esims", tags=["esims"])
@@ -79,6 +82,46 @@ def refresh_esims_by_account(
     settings: AppSettings,
 ) -> list[ESIMRefreshResult]:
     return refresh_esims(request=request, db=db, settings=settings, account_id=account_id)
+
+
+@router.post(
+    "/{imsi}/refresh",
+    response_model=ESIMRefreshResult,
+    status_code=status.HTTP_200_OK,
+)
+def refresh_esim_by_imsi(
+    imsi: Annotated[str, Path(pattern=r"^[0-9]{5,15}$")],
+    request: Request,
+    db: DatabaseSession,
+    settings: AppSettings,
+) -> ESIMRefreshResult:
+    try:
+        return refresh_telcovision_subscriber(
+            db,
+            settings,
+            imsi=imsi,
+            request_id=request.state.request_id,
+            outbound_exchanges=request.state.outbound_exchanges,
+        )
+    except TelcovisionNotConfiguredError:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "eSIM refresh is not configured"
+        ) from None
+    except TelcovisionError as error:
+        logger.warning(
+            "Telcovision eSIM refresh failed imsi=%s category=%s provider_code=%s",
+            imsi,
+            error.category,
+            error.provider_code,
+        )
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            {
+                "message": "Telcovision eSIM refresh failed",
+                "category": error.category,
+                "provider_code": error.provider_code,
+            },
+        ) from None
 
 
 @router.get("/{esim_id}", response_model=ESIMRead)

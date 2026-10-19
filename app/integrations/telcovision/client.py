@@ -214,6 +214,15 @@ class TelcovisionClient:
         """Request subscribers for one account through the shared transport."""
         return self._request("listSubscriber", {"accountId": str(account_id)}, validate=validate)
 
+    def get_single_subscriber(
+        self,
+        imsi: str,
+        *,
+        validate: Callable[[dict[str, object]], object] | None = None,
+    ) -> dict[str, object]:
+
+        return self._request("getSingleSubscriber", {"imsi": str(imsi)}, validate=validate)
+
 
 @contextmanager
 def open_telcovision_client(

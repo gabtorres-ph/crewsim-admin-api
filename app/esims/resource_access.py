@@ -6,23 +6,11 @@ from sqlalchemy.orm import Session
 
 from app.common.resource_access import CRUDResourceAccess
 from app.esims.models import ESIM
-from app.esims.schemas import ESIMSnapshot
+from app.esims.schemas import ESIMSingleSnapshot, ESIMSnapshot
 
 ESIM_BATCH_SIZE = 500
 TOKEN_ALPHABET = ascii_lowercase + digits
 TOKEN_LENGTH = 7
-SNAPSHOT_FIELDS = (
-    "isesim",
-    "balance",
-    "use_account_for_charging",
-    "smdpserver",
-    "activationcode",
-    "allow_data",
-    "mobileplanid",
-    "activationdate",
-    "lastusagedate",
-    "subscriber_status",
-)
 
 
 class ESIMResourceAccess(CRUDResourceAccess[ESIM]):
@@ -45,8 +33,9 @@ class ESIMResourceAccess(CRUDResourceAccess[ESIM]):
                 )
             }
             for snapshot in batch:
-                values = {field: getattr(snapshot, field) for field in SNAPSHOT_FIELDS}
-                values["accountid"] = snapshot.account_id
+                values = snapshot.model_dump(exclude_unset=True)
+                values.pop("imsi")
+                values["accountid"] = values.pop("account_id")
                 current = existing.get(snapshot.imsi)
                 if current is None:
                     # TODO tokens are not checked for uniqueness and have no DB constraint;
@@ -71,6 +60,18 @@ class ESIMResourceAccess(CRUDResourceAccess[ESIM]):
 
     def get_by_imsi(self, imsi: str) -> ESIM | None:
         return self.session.scalar(select(ESIM).where(ESIM.imsi == imsi))
+
+    def update_single_snapshot(self, esim: ESIM, snapshot: ESIMSingleSnapshot) -> ESIM:
+        """Apply only fields supplied by Telcovision to an existing eSIM."""
+        values = snapshot.model_dump(exclude_unset=True)
+        values.pop("imsi")
+        if "account_id" in values:
+            values["accountid"] = values.pop("account_id")
+        for field, value in values.items():
+            if getattr(esim, field) != value:
+                setattr(esim, field, value)
+        self.session.flush()
+        return esim
 
     def list_for_user(self, user_id: int, *, offset: int = 0, limit: int = 100) -> list[ESIM]:
         statement = (

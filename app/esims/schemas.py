@@ -144,8 +144,45 @@ class ESIMSnapshot(BaseModel):
     activationdate: datetime | None = None
     lastusagedate: datetime | None = None
     subscriber_status: IMSIString | None = None
+    lastnetworkdate: datetime | None = None
+    lastmcc: IMSIString | None = None
+    lastmnc: IMSIString | None = None
+    lastcellid: int | None = None
+    lastlac: int | None = None
+    imei: IMSIString | None = None
+    imei_device: IMSIString | None = None
+    lastrat: IMSIString | None = None
 
     model_config = ConfigDict(str_strip_whitespace=True)
+
+
+class ESIMSingleSnapshot(BaseModel):
+    imsi: IMSIString = Field(pattern=r"^[0-9]{5,15}$")
+    account_id: int | None = Field(default=None, gt=0, strict=True)
+    balance: float | None = Field(default=None, allow_inf_nan=False)
+    use_account_for_charging: bool | None = Field(default=None, strict=True)
+    allow_data: bool | None = Field(default=None, strict=True)
+    mobileplanid: int | None = Field(default=None, gt=0, strict=True)
+    activationdate: datetime | None = None
+    lastusagedate: datetime | None = None
+    subscriber_status: IMSIString | None = None
+    lastnetworkdate: datetime | None = None
+    lastmcc: IMSIString | None = None
+    lastmnc: IMSIString | None = None
+    lastcellid: int | None = None
+    lastlac: int | None = None
+    imei: IMSIString | None = None
+    imei_device: IMSIString | None = None
+    lastrat: IMSIString | None = None
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    @field_validator("use_account_for_charging")
+    @classmethod
+    def reject_null_charging(cls, value: bool | None) -> bool:
+        if value is None:
+            raise ValueError("field cannot be null")
+        return value
 
 
 class ESIMRefreshResult(BaseModel):
