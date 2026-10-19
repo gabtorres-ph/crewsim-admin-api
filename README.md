@@ -275,9 +275,16 @@ and delete (`DELETE`) routes return `409`. Account and eSIM read routes are unch
 
 ### Telcovision subscriber refresh
 
-`POST /api/esims/refresh?account_id=<account_id>` synchronizes one Telcovision account's
-subscribers into local eSIMs. `account_id` is required and must identify an existing local
-account. The request uses the existing `TELCOVISION_API_URL` and `TELCOVISION_API_TOKEN`
+`POST /api/esims/refresh/{account_id}` synchronizes one Telcovision account's subscribers into
+local eSIMs. The existing `POST /api/esims/refresh?account_id=<account_id>` form is also supported
+and uses the same refresh pipeline. Neither form requires a request body. `account_id` must be
+a positive integer identifying an existing local account. For example:
+
+```bash
+curl -X POST http://localhost:8000/api/esims/refresh/123
+```
+
+The request uses the existing `TELCOVISION_API_URL` and `TELCOVISION_API_TOKEN`
 settings, sends `{"listSubscriber": {"accountId": "<account_id>"}}` to Telcovision, and
 commits all inserts and updates in one transaction. It returns a `list[ESIMRefreshResult]`
 containing the persisted eSIM values in snapshot order.
@@ -314,9 +321,10 @@ When invoking it from a request handler, pass `request.state.request_id` and
 `request.state.outbound_exchanges` so the existing middleware persists the outbound exchange.
 In the standalone example, exchanges remain in the caller's in-memory list.
 
-The endpoint returns 422 when `account_id` is missing, zero, negative, or not an integer; 404
-when the account does not exist locally; 502 for Telcovision transport, provider, or response
-errors; and 503 when Telcovision configuration is missing. It has no refresh key.
+Both forms return 422 when `account_id` is zero, negative, or not an integer. The query form
+also returns 422 when `account_id` is missing. Both return 404 when the account does not exist
+locally; 502 for Telcovision transport, provider, or response errors; and 503 when Telcovision
+configuration is missing. Neither form has a refresh key.
 
 Each `imsiList[].imsi` produces one eSIM snapshot. The pipeline matches local records by IMSI
 and updates these fields:

@@ -71,6 +71,16 @@ def refresh_esims(
         ) from None
 
 
+@router.post("/refresh/{account_id}", response_model=list[ESIMRefreshResult])
+def refresh_esims_by_account(
+    account_id: Annotated[int, Path(gt=0)],
+    request: Request,
+    db: DatabaseSession,
+    settings: AppSettings,
+) -> list[ESIMRefreshResult]:
+    return refresh_esims(request=request, db=db, settings=settings, account_id=account_id)
+
+
 @router.get("/{esim_id}", response_model=ESIMRead)
 def get_esim(esim_id: Annotated[int, Path(gt=0)], db: DatabaseSession) -> ESIMRead:
     return ESIMManager(db).get_esim(esim_id)
