@@ -29,6 +29,10 @@ to the human.
    check instead.
 6. **Stay inside the approved scope.** Do not commit, push, add or upgrade dependencies, or change
    lockfiles unless the approved plan says so.
+7. **Keep plans and implementations as simple as possible.** Choose the smallest change that
+   satisfies the request. Use the least defensive code needed for the actual contract and known
+   failure cases; avoid speculative guards, duplicate validation, fallback paths, and retries.
+   Add abstractions only when required by the project's architecture or a concrete current need.
 
 Reading files, searching the codebase, and inspecting version-control state are allowed at any
 time. They are how you understand the project, not validation.
@@ -67,8 +71,9 @@ Before designing anything, build an accurate picture of the project.
 
 ## Phase 2: Senior design checklist
 
-Work through each item. Record the relevant ones in the plan's **Design decisions**. Skip items
-that clearly don't apply.
+Consider only the items relevant to the request and record decisions that affect implementation
+in the plan's **Design decisions**. This checklist does not require extra layers, files, guards,
+or infrastructure.
 
 - **Architecture and layering:** Does each new piece sit in the right layer and domain? Does
   anything import against the allowed dependency direction or skip a layer?
@@ -91,13 +96,16 @@ that clearly don't apply.
   propagated? Is there any `print`?
 - **Configuration:** Do new settings go through the project's settings module, with safe defaults
   and a matching entry in `.env.example` (or equivalent)?
-- **External integrations:** Is the provider isolated behind an adapter so its details stay out of
-  domain code? Are timeouts, retries, and failure behavior defined?
+- **External integrations:** Does an existing integration pattern apply? Add an adapter only when
+  required by the architecture or a concrete current need. Define timeouts and failure behavior
+  where needed; add retries only when required and safe for the operation.
 - **Rollout:** Is a feature flag needed? In what order must migrations and code deploy? How is the
   change rolled back?
 
-Choose the simplest design that meets the requirements. For each alternative you rejected, write
-one line explaining why.
+Choose the simplest plan and design that meet the requirements, with the fewest necessary files
+and moving parts. Prefer direct code and existing patterns over new helpers, base classes,
+interfaces, or generic frameworks. Explain rejected alternatives only when a material trade-off
+needs a decision.
 
 ## Phase 3: Write the plan
 
@@ -114,7 +122,7 @@ Produce the plan using this exact template:
 - Non-goals: <...>
 
 ## Design decisions
-- <Decision>: <chosen approach>. Rejected: <alternative> because <reason>.
+- <Decision>: <simplest sufficient approach and why>. <Rejected alternative only if material.>
 - Assumptions: <anything assumed rather than confirmed>.
 
 ## Files affected
@@ -125,7 +133,7 @@ Produce the plan using this exact template:
 
 ### Step 1: <title>
 - **Goal:** <one sentence>
-- **Files:** `<path>`, `<path>`
+- **File:** `<exactly one path>` (add or edit)
 - **Instructions:**
   - <Specific action naming exact classes, functions, fields, types, and signatures.>
   - <...>
@@ -148,8 +156,12 @@ Produce the plan using this exact template:
 
 ### Step sizing rules
 
-- **One concern per step**, for example "add the model" or "add the list endpoint".
-- **About 1–3 files per step.** Split larger steps.
+- **Exactly one file added or edited per step.** Name its exact path and whether it is added or
+  edited. Split work that touches multiple files into separate steps, even for one feature.
+- **One step per affected file.** Group all changes to that file in its step. Reference other
+  files as context or dependencies without changing them in the same step.
+- **Keep the plan minimal.** Include only files and changes required for the request. Do not
+  introduce files, layers, abstractions, or defensive behavior just to fill out the template.
 - **Order steps bottom-up:** models → migration → schemas → persistence → business logic → routes →
   registration, wiring, and config.
 - **No hidden decisions.** Every judgment call (names, types, status codes, error cases, defaults)
@@ -193,6 +205,10 @@ Present the plan and **stop**.
 - Keep business rules in the business-logic layer, not in route handlers or models.
 - Keep functions small and single-purpose. Prefer clear names to comments. Add docstrings and
   comments only where intent isn't obvious, matching the density of the surrounding code.
+- Prefer straightforward code. Extract helpers, classes, or interfaces only when they solve a
+  concrete current need or follow required project architecture.
+- Trust established internal contracts. Validate at the relevant boundary and handle known
+  failures without redundant checks, speculative fallbacks, or unnecessary exception wrappers.
 - Raise specific exceptions. Never use bare `except` or silently swallow errors.
 - Use the `logging` module, never `print`.
 - Never hard-code secrets, credentials, or environment-specific values. Read them from configuration.
@@ -207,7 +223,7 @@ When implementation is done, report back using this template:
 <One or two sentences on what was built.>
 
 ## Changes by step
-- Step 1: <what was done> (`<files>`)
+- Step 1: <what was done> (`<file>`)
 - Step 2: ...
 
 ## Deviations from the plan
@@ -226,7 +242,9 @@ When implementation is done, report back using this template:
 - Implementing anything before the plan is approved.
 - Writing or editing tests, or running tests, linters, type checkers, the app, or migrations.
 - Vague steps such as "update the service as needed" or "handle errors appropriately".
+- Plan steps that add or edit more than one file.
 - Gold-plating: features, abstractions, or configurability nobody asked for.
+- Defensive code for hypothetical failures, repeated validation, or unnecessary fallback paths.
 - Business logic in route handlers, or database access outside the persistence layer.
 - Imports that break the project's dependency direction.
 - Broad refactors or reformatting outside the approved scope.

@@ -160,3 +160,7 @@ class TelcovisionSubscriberList(TelcovisionResponseModel):
 
 class TelcovisionSubscribersResponse(TelcovisionResponseModel):
     list_subscriber: TelcovisionSubscriberList = Field(alias="listSubscriber")
+
+
+class TelcovisionSubscriberMoveResponse(TelcovisionResponseModel):
+    moved_count: StrictInt = Field(alias="moveSubscriberRangeToAccount", ge=0)

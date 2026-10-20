@@ -223,6 +223,27 @@ class TelcovisionClient:
 
         return self._request("getSingleSubscriber", {"imsi": str(imsi)}, validate=validate)
 
+    def move_subscriber_range_to_account(
+        self,
+        range_start: str,
+        range_end: str,
+        src_account: int,
+        dst_account: int,
+        *,
+        validate: Callable[[dict[str, object]], object] | None = None,
+    ) -> dict[str, object]:
+        return self._request(
+            "moveSubscriberRangeToAccount",
+            {
+                "rangeType": "IMSI",
+                "rangeStart": range_start,
+                "rangeEnd": range_end,
+                "srcAccountId": src_account,
+                "destAccount": dst_account,
+            },
+            validate=validate,
+        )
+
 
 @contextmanager
 def open_telcovision_client(

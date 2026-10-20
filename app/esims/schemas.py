@@ -211,3 +211,21 @@ class ESIMRefreshResult(BaseModel):
     lastrat: str | None = None
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
+class ESIMMoveRequest(BaseModel):
+    source_account_id: int = Field(gt=0)
+    destination_account_id: int = Field(gt=0)
+    imsis: list[Annotated[IMSIString, Field(pattern=r"^[0-9]{5,15}$")]] = Field(min_length=1)
+
+    @field_validator("imsis")
+    @classmethod
+    def reject_duplicate_imsis(cls, value: list[str]) -> list[str]:
+        if len(set(value)) != len(value):
+            raise ValueError("IMSIs must be unique")
+        return value
+
+
+class ESIMMoveResult(BaseModel):
+    imsi: str
+    account_id: int

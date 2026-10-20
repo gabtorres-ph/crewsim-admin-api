@@ -8,9 +8,18 @@ from app.accounts.manager import AccountManager
 from app.config import Settings, get_settings
 from app.database import get_db
 from app.esims.manager import ESIMManager
-from app.esims.schemas import ESIMCreate, ESIMRead, ESIMRefreshResult, ESIMUpdate
+from app.esims.schemas import (
+    ESIMCreate,
+    ESIMMoveRequest,
+    ESIMMoveResult,
+    ESIMRead,
+    ESIMRefreshResult,
+    ESIMUpdate,
+)
 from app.integrations.telcovision.client import TelcovisionError, TelcovisionNotConfiguredError
 from app.integrations.telcovision.subscribers import (
+    TelcovisionSubscriberMoveError,
+    move_subscriber_range_to_account,
     refresh_telcovision_subscriber,
     refresh_telcovision_subscribers,
 )
@@ -36,6 +45,67 @@ def list_esims(
     limit: Annotated[int, Query(ge=1, le=100)] = 100,
 ) -> list[ESIMRead]:
     return ESIMManager(db).list_esims(user_id=user_id, offset=offset, limit=limit)
+
+
+@router.post("/move-to-account", response_model=list[ESIMMoveResult])
+def move_esims_to_account(
+    data: ESIMMoveRequest,
+    request: Request,
+    db: DatabaseSession,
+    settings: AppSettings,
+) -> list[ESIMMoveResult]:
+    try:
+        return move_subscriber_range_to_account(
+            db,
+            settings,
+            source_account_id=data.source_account_id,
+            destination_account_id=data.destination_account_id,
+            imsis=data.imsis,
+            request_id=request.state.request_id,
+            outbound_exchanges=request.state.outbound_exchanges,
+        )
+    except TelcovisionNotConfiguredError:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "eSIM transfer is not configured"
+        ) from None
+    except TelcovisionSubscriberMoveError as error:
+        logger.warning(
+            "Telcovision eSIM transfer failed source_account_id=%s destination_account_id=%s "
+            "failed_imsi=%s category=%s provider_code=%s",
+            data.source_account_id,
+            data.destination_account_id,
+            error.failed_imsi,
+            error.category,
+            error.provider_code,
+        )
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            {
+                "message": "Telcovision eSIM transfer failed",
+                "category": error.category,
+                "provider_code": error.provider_code,
+                "moved_imsis": error.moved_imsis,
+                "failed_imsi": error.failed_imsi,
+                "not_attempted_imsis": error.not_attempted_imsis,
+            },
+        ) from None
+    except TelcovisionError as error:
+        logger.warning(
+            "Telcovision eSIM transfer failed source_account_id=%s destination_account_id=%s "
+            "category=%s provider_code=%s",
+            data.source_account_id,
+            data.destination_account_id,
+            error.category,
+            error.provider_code,
+        )
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            {
+                "message": "Telcovision eSIM transfer failed",
+                "category": error.category,
+                "provider_code": error.provider_code,
+            },
+        ) from None
 
 
 @router.post("/refresh", response_model=list[ESIMRefreshResult])
@@ -161,3 +231,4 @@ def list_user_esims(
     limit: Annotated[int, Query(ge=1, le=100)] = 100,
 ) -> list[ESIMRead]:
     return ESIMManager(db).list_esims(user_id=user_id, offset=offset, limit=limit)
+

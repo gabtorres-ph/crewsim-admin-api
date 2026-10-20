@@ -4,12 +4,13 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.accounts.resource_access import AccountResourceAccess
-from app.common.exceptions import InvalidOperationError, ResourceNotFoundError
+from app.common.exceptions import InvalidOperationError, ResourceConflictError, ResourceNotFoundError
 from app.common.manager import TransactionalManager
 from app.esims.models import ESIM
 from app.esims.resource_access import ESIMResourceAccess
 from app.esims.schemas import (
     ESIMCreate,
+    ESIMMoveResult,
     ESIMRefreshResult,
     ESIMSingleSnapshot,
     ESIMSnapshot,
@@ -115,6 +116,44 @@ class ESIMManager(TransactionalManager):
             conflict_message="The eSIM cannot be deleted because it is referenced by other data",
         )
 
+    def validate_account_move(
+        self, source_account_id: int, destination_account_id: int, imsis: list[str]
+    ) -> None:
+        source_account = self.accounts.get(source_account_id)
+        if source_account is None:
+            raise ResourceNotFoundError("Account", source_account_id)
+        destination_account = self.accounts.get(destination_account_id)
+        if destination_account is None:
+            raise ResourceNotFoundError("Account", destination_account_id)
+        if source_account_id == destination_account_id:
+            raise InvalidOperationError("Source and destination accounts must differ")
+        if (
+            source_account.reseller_id is not None
+            and destination_account.reseller_id is not None
+            and source_account.reseller_id != destination_account.reseller_id
+        ):
+            raise InvalidOperationError("Subscribers can only move between accounts of the same reseller")
+        self._require_esims_in_account(source_account_id, imsis)
+
+    def move_esims_to_account(
+        self,
+        src_account: int,
+        dst_account: int,
+        imsi_list: list[str],
+        move_subscribers: Callable[[], None],
+    ) -> list[ESIMMoveResult]:
+        def operation() -> list[ESIMMoveResult]:
+            self._require_esims_in_account(src_account, imsi_list, for_update=True)
+            move_subscribers()
+            esims = self.esims.move_esims_to_account(src_account, dst_account, imsi_list)
+            if len(esims) != len(imsi_list):
+                raise ResourceConflictError("The eSIM account assignment changed during the transfer")
+            return [ESIMMoveResult(imsi=esim.imsi, account_id=dst_account) for esim in esims]
+
+        return self._write(
+            operation, conflict_message="The eSIM transfer conflicts with existing database data"
+        )
+
     def _require_user(self, user_id: int) -> None:
         if self.users.get(user_id) is None:
             raise ResourceNotFoundError("User", user_id)
@@ -122,6 +161,20 @@ class ESIMManager(TransactionalManager):
     def _require_account(self, account_id: int) -> None:
         if self.accounts.get(account_id) is None:
             raise ResourceNotFoundError("Account", account_id)
+
+    def _require_esims_in_account(
+        self, account_id: int, imsis: list[str], *, for_update: bool = False
+    ) -> None:
+        esims = self.esims.get_by_imsis(imsis, for_update=for_update)
+        esims_by_imsi = {esim.imsi: esim for esim in esims}
+        for imsi in imsis:
+            esim = esims_by_imsi.get(imsi)
+            if esim is None:
+                raise ResourceNotFoundError("eSIM with IMSI", imsi)
+            if esim.accountid != account_id:
+                raise ResourceConflictError(
+                    f"eSIM with IMSI '{imsi}' does not belong to account '{account_id}'"
+                )
 
     def _validate_references(self, values: dict[str, Any]) -> None:
         if values.get("user_id") is not None:

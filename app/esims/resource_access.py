@@ -61,6 +61,12 @@ class ESIMResourceAccess(CRUDResourceAccess[ESIM]):
     def get_by_imsi(self, imsi: str) -> ESIM | None:
         return self.session.scalar(select(ESIM).where(ESIM.imsi == imsi))
 
+    def get_by_imsis(self, imsis: list[str], *, for_update: bool = False) -> list[ESIM]:
+        statement = select(ESIM).where(ESIM.imsi.in_(imsis)).order_by(ESIM.imsi)
+        if for_update:
+            statement = statement.with_for_update()
+        return list(self.session.scalars(statement))
+
     def update_single_snapshot(self, esim: ESIM, snapshot: ESIMSingleSnapshot) -> ESIM:
         """Apply only fields supplied by Telcovision to an existing eSIM."""
         values = snapshot.model_dump(exclude_unset=True)
@@ -88,3 +94,13 @@ class ESIMResourceAccess(CRUDResourceAccess[ESIM]):
             .limit(limit)
         )
         return list(self.session.scalars(statement))
+
+    def move_esims_to_account(
+        self, src_account: int, dst_account: int, imsi_list: list[str]
+    ) -> list[ESIM]:
+        esims = self.get_by_imsis(imsi_list)
+        moved_esims = [esim for esim in esims if esim.accountid == src_account]
+        for esim in moved_esims:
+            esim.accountid = dst_account
+        self.session.flush()
+        return moved_esims

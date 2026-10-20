@@ -1,20 +1,48 @@
 import logging
+from functools import partial
 
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.esims.manager import ESIMManager
-from app.esims.schemas import ESIMRefreshResult, ESIMSingleSnapshot, ESIMSnapshot
+from app.esims.schemas import ESIMMoveResult, ESIMRefreshResult, ESIMSingleSnapshot, ESIMSnapshot
 from app.integrations.redis.outbound_logging import OutboundExchange
 from app.integrations.telcovision.client import TelcovisionError, open_telcovision_client
 from app.integrations.telcovision.schemas import (
     TelcovisionListedSubscriber,
     TelcovisionSingleSubscriberResponse,
+    TelcovisionSubscriberMoveResponse,
     TelcovisionSubscribersResponse,
 )
 
 logger = logging.getLogger(__name__)
+
+
+class TelcovisionSubscriberMoveError(TelcovisionError):
+    def __init__(
+        self,
+        error: TelcovisionError,
+        *,
+        moved_imsis: list[str],
+        failed_imsi: str,
+        not_attempted_imsis: list[str],
+    ) -> None:
+        super().__init__(error.category, error.provider_code)
+        self.moved_imsis = moved_imsis
+        self.failed_imsi = failed_imsi
+        self.not_attempted_imsis = not_attempted_imsis
+
+
+def parse_subscriber_move(payload: dict[str, object]) -> int:
+    """Return the provider's moved count, accepting only a singleton IMSI move."""
+    try:
+        moved_count = TelcovisionSubscriberMoveResponse.model_validate(payload).moved_count
+    except ValidationError:
+        raise TelcovisionError("invalid_response") from None
+    if moved_count != 1:
+        raise TelcovisionError("unexpected_moved_count")
+    return moved_count
 
 
 def _subscriber_snapshot(subscriber: TelcovisionListedSubscriber, *, imsi: str) -> ESIMSnapshot:
@@ -184,3 +212,74 @@ def refresh_telcovision_subscribers(
             return snapshots
 
         return ESIMManager(session).refresh_esims(account_id, load_snapshot)
+
+
+def move_subscriber_range_to_account(
+    session: Session,
+    settings: Settings,
+    *,
+    source_account_id: int,
+    destination_account_id: int,
+    imsis: list[str],
+    request_id: str,
+    outbound_exchanges: list[OutboundExchange],
+) -> list[ESIMMoveResult]:
+    """Move selected IMSIs in Telcovision, then mirror each confirmed move locally."""
+    manager = ESIMManager(session)
+    manager.validate_account_move(source_account_id, destination_account_id, imsis)
+    results: list[ESIMMoveResult] = []
+
+    with open_telcovision_client(
+        settings, request_id=request_id, outbound_exchanges=outbound_exchanges
+    ) as client:
+        logger.info(
+            "Telcovision subscriber transfer started request_id=%s source_account_id=%s "
+            "destination_account_id=%s esims=%d",
+            request_id,
+            source_account_id,
+            destination_account_id,
+            len(imsis),
+        )
+        for index, imsi in enumerate(imsis):
+            move_subscriber = partial(
+                client.move_subscriber_range_to_account,
+                imsi,
+                imsi,
+                source_account_id,
+                destination_account_id,
+                validate=parse_subscriber_move,
+            )
+
+            try:
+                results.extend(
+                    manager.move_esims_to_account(
+                        source_account_id,
+                        destination_account_id,
+                        [imsi],
+                        move_subscriber,
+                    )
+                )
+            except TelcovisionError as error:
+                raise TelcovisionSubscriberMoveError(
+                    error,
+                    moved_imsis=[result.imsi for result in results],
+                    failed_imsi=imsi,
+                    not_attempted_imsis=imsis[index + 1 :],
+                ) from None
+            except Exception:
+                logger.error(
+                    "Telcovision subscriber transfer local update failed request_id=%s "
+                    "imsi=%s moved_imsis=%s",
+                    request_id,
+                    imsi,
+                    [result.imsi for result in results],
+                )
+                raise
+
+            logger.info(
+                "Telcovision subscriber transfer completed request_id=%s imsi=%s",
+                request_id,
+                imsi,
+            )
+
+    return results
