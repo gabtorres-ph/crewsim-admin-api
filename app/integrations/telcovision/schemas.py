@@ -164,3 +164,16 @@ class TelcovisionSubscribersResponse(TelcovisionResponseModel):
 
 class TelcovisionSubscriberMoveResponse(TelcovisionResponseModel):
     moved_count: StrictInt = Field(alias="moveSubscriberRangeToAccount", ge=0)
+
+
+class TelcovisionSubscriberTariff(TelcovisionResponseModel):
+    roaming_plan_id: StrictInt = Field(alias="roamingplanid", gt=0)
+    roaming_plan_name: str = Field(alias="roamingplanname", max_length=255)
+
+
+class TelcovisionSubscriberTariffList(TelcovisionResponseModel):
+    tariffs: list[TelcovisionSubscriberTariff] = Field(alias="tariff")
+
+
+class TelcovisionSubscriberTariffResponse(TelcovisionResponseModel):
+    list_subscriber_tariff: TelcovisionSubscriberTariffList = Field(alias="listSubscriberTariff")
