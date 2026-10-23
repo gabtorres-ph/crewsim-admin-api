@@ -244,6 +244,13 @@ class TelcovisionClient:
             validate=validate,
         )
 
+    def list_subscriber_tariff(
+        self,
+        *,
+        validate: Callable[[dict[str, object]], object] | None = None,
+    ) -> dict[str, object]:
+        return self._request("listSubscriberTariff", {}, validate=validate)
+
 
 @contextmanager
 def open_telcovision_client(

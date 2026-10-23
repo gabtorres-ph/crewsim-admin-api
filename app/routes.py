@@ -11,6 +11,7 @@ from app.favorites.routes import router as favorites_router
 from app.favorites.routes import user_router as user_favorites_router
 from app.language.routes import router as language_router
 from app.packages.routes import router as packages_router
+from app.roaming_plans.routes import router as roaming_plans_router
 from app.sim_notifications.routes import router as sim_notifs_router
 from app.sms.routes import router as sms_router
 from app.stripe.routes import router as stripe_notifs_router
@@ -33,6 +34,7 @@ api_router.include_router(esims_router)
 api_router.include_router(favorites_router)
 api_router.include_router(language_router)
 api_router.include_router(packages_router)
+api_router.include_router(roaming_plans_router)
 api_router.include_router(sim_notifs_router)
 api_router.include_router(sms_router)
 api_router.include_router(usage_router)

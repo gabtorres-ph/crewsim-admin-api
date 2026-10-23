@@ -70,12 +70,36 @@ Use the API docs to send these requests:
 | `POST /api/accounts/refresh` | Sync all accounts; **delete local accounts missing from the provider** |
 | `POST /api/esims/refresh/{account_id}` | Add or update one account's eSIMs; keep missing eSIMs |
 | `POST /api/esims/{imsi}/refresh` | Refresh an existing eSIM from Telcovision's `getSingleSubscriber` response |
+| `POST /api/esims/move-to-account` | Move selected eSIMs between accounts in Telcovision, then update CrewSim |
 
 Refresh accounts first, then refresh eSIMs using an existing account ID.
 The eSIM route also accepts `POST /api/esims/refresh?account_id=123`. Neither form needs a body.
 The single eSIM refresh route takes a 5–15 digit IMSI and needs no body. Fields omitted by
 Telcovision keep their existing database values; an unknown local IMSI returns 404.
 Refresh routes currently have no application-level access check.
+
+### Move eSIMs between accounts
+
+Send a source account, destination account, and one or more IMSIs:
+
+```json
+{
+  "source_account_id": 10,
+  "destination_account_id": 15,
+  "imsis": ["200010416000001", "200010416000003"]
+}
+```
+
+The accounts must differ, every IMSI must currently belong to the source account in CrewSim, and
+Telcovision permits moves only between accounts of the same reseller. CrewSim sends one provider
+request per IMSI so it never includes unrequested subscribers in a provider range. A successful
+request returns the moved IMSIs with their destination account IDs.
+
+Each confirmed move commits separately. If a later provider request fails, previously completed
+moves remain committed and the 502 response identifies `moved_imsis`, `failed_imsi`, and
+`not_attempted_imsis`. Before retrying an interrupted or timed-out transfer, refresh each affected
+eSIM with `POST /api/esims/{imsi}/refresh` to reconcile CrewSim with Telcovision, then retry only
+the IMSIs still assigned to the source account.
 
 ## Deployment settings
 
