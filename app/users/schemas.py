@@ -3,16 +3,19 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.currencies.schemas import CurrencyCode
+from app.language.schemas import Iso1
+from app.timezone.schemas import TimezoneName
+
 NonEmptyString = Annotated[str, Field(min_length=1, max_length=255)]
 ReferralCode = Annotated[str, Field(min_length=1, max_length=8)]
-LookupId = Annotated[int, Field(gt=0)]
 
 
 class UserBase(BaseModel):
     email: NonEmptyString
-    language: LookupId
-    currency: LookupId
-    timezone: LookupId
+    lang_iso1: Iso1
+    currency_code: CurrencyCode
+    timezone: TimezoneName
     firstname: NonEmptyString | None = None
     lastname: NonEmptyString | None = None
     airline: NonEmptyString | None = None
@@ -35,9 +38,9 @@ class UserCreate(UserBase):
 
 class UserUpdate(BaseModel):
     email: NonEmptyString | None = None
-    language: LookupId | None = None
-    currency: LookupId | None = None
-    timezone: LookupId | None = None
+    lang_iso1: Iso1 | None = None
+    currency_code: CurrencyCode | None = None
+    timezone: TimezoneName | None = None
     firstname: NonEmptyString | None = None
     lastname: NonEmptyString | None = None
     airline: NonEmptyString | None = None
@@ -55,8 +58,8 @@ class UserUpdate(BaseModel):
 
     @field_validator(
         "email",
-        "language",
-        "currency",
+        "lang_iso1",
+        "currency_code",
         "timezone",
         "firstname",
         "lastname",

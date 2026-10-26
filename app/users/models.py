@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -17,9 +17,9 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     email: Mapped[str] = mapped_column(String(255), nullable=False)
-    language: Mapped[int] = mapped_column(ForeignKey("languages.id"), nullable=False)
-    currency: Mapped[int] = mapped_column(ForeignKey("currencies.id"), nullable=False)
-    timezone: Mapped[int] = mapped_column(ForeignKey("time_zone.id"), nullable=False)
+    lang_iso1: Mapped[str] = mapped_column(String(2), nullable=False)
+    currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
+    timezone: Mapped[str] = mapped_column(Text, nullable=False)
     firstname: Mapped[str | None] = mapped_column(String(255), nullable=True)
     lastname: Mapped[str | None] = mapped_column(String(255), nullable=True)
     airline: Mapped[str | None] = mapped_column(String(255), nullable=True)

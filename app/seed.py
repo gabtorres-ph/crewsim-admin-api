@@ -347,18 +347,18 @@ def seed_database(session: Session, records: Sequence[SeedRecord]) -> SeedResult
     created_stripe_notifications = 0
 
     with session.begin():
-        languages_by_value: dict[str, int] = {}
+        languages_by_value: dict[str, str] = {}
         for language in session.scalars(select(Language)):
             if language.iso1 is not None:
-                languages_by_value[language.iso1.casefold()] = language.id
-            languages_by_value[language.name.casefold()] = language.id
+                languages_by_value[language.iso1.casefold()] = language.iso1
+                languages_by_value[language.name.casefold()] = language.iso1
 
         currencies_by_code = {
-            currency.code.casefold(): currency.id
+            currency.code.casefold(): currency.code
             for currency in session.scalars(select(Currencies))
         }
         timezones_by_name = {
-            timezone.name.casefold(): timezone.id
+            timezone.name.casefold(): timezone.name
             for timezone in session.scalars(select(Timezone))
         }
 
@@ -418,8 +418,8 @@ def seed_database(session: Session, records: Sequence[SeedRecord]) -> SeedResult
             if user is None:
                 user = User(
                     email=record.email,
-                    language=languages_by_value[record.language.casefold()],
-                    currency=currencies_by_code[record.currency.casefold()],
+                    lang_iso1=languages_by_value[record.language.casefold()],
+                    currency_code=currencies_by_code[record.currency.casefold()],
                     timezone=timezones_by_name[record.timezone.casefold()],
                     firstname=record.firstname,
                     lastname=record.lastname,
