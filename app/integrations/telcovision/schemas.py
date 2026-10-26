@@ -1,5 +1,6 @@
 import re
 from datetime import datetime
+from decimal import Decimal
 from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictBool, StrictInt
@@ -177,3 +178,36 @@ class TelcovisionSubscriberTariffList(TelcovisionResponseModel):
 
 class TelcovisionSubscriberTariffResponse(TelcovisionResponseModel):
     list_subscriber_tariff: TelcovisionSubscriberTariffList = Field(alias="listSubscriberTariff")
+
+
+class TelcovisionMccMnc(TelcovisionResponseModel):
+    mcc: str = Field(min_length=1)
+    mnc: str = Field(min_length=1)
+
+
+class TelcovisionTariffRuleOperator(TelcovisionResponseModel):
+    network_id: StrictInt = Field(alias="networkId", gt=0)
+    continent: str = Field(max_length=100)
+    country_name: str = Field(alias="countryName", max_length=100)
+    country_iso2: str = Field(alias="countryIso2", min_length=2, max_length=2)
+    operator_name: str = Field(alias="operatorName", max_length=255)
+    mcc_mncs: list[TelcovisionMccMnc] = Field(alias="mccMncs")
+    tadigs: list[str]
+
+
+class TelcovisionTariffRule(TelcovisionResponseModel):
+    operator: TelcovisionTariffRuleOperator
+    roaming_plan_rule_id: StrictInt = Field(alias="roamingplanruleid", gt=0)
+    roaming_plan_id: StrictInt = Field(alias="roamingplanid", gt=0)
+    network_id: StrictInt = Field(alias="networkid", gt=0)
+    active: StrictBool
+    data_rate: Decimal = Field(alias="datarate", allow_inf_nan=False)
+    start_date: datetime = Field(alias="startdate")
+
+
+class TelcovisionTariffRuleList(TelcovisionResponseModel):
+    rules: list[TelcovisionTariffRule] = Field(alias="rule")
+
+
+class TelcovisionTariffRuleResponse(TelcovisionResponseModel):
+    list_tariff_rule: TelcovisionTariffRuleList = Field(alias="listTariffRule")

@@ -63,7 +63,7 @@ class TelcovisionClient:
     def _request(
         self,
         operation: str,
-        payload: dict[str, object],
+        payload: object,
         *,
         validate: Callable[[dict[str, object]], object] | None = None,
     ) -> dict[str, object]:
@@ -102,7 +102,7 @@ class TelcovisionClient:
     def _send(
         self,
         operation: str,
-        payload: dict[str, object],
+        payload: object,
         validate: Callable[[dict[str, object]], object] | None,
     ) -> dict[str, object]:
         logger.info(
@@ -250,6 +250,14 @@ class TelcovisionClient:
         validate: Callable[[dict[str, object]], object] | None = None,
     ) -> dict[str, object]:
         return self._request("listSubscriberTariff", {}, validate=validate)
+
+    def list_tariff_rules(
+        self,
+        tariff_id: int,
+        *,
+        validate: Callable[[dict[str, object]], object] | None = None,
+    ) -> dict[str, object]:
+        return self._request("listTariffRule", tariff_id, validate=validate)
 
 
 @contextmanager
