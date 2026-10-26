@@ -32,7 +32,7 @@ class UserManager(TransactionalManager):
     def update_user(self, user_id: int, data: UserUpdate) -> User:
         user = self.get_user(user_id)
         values = data.model_dump(exclude_unset=True)
-        if "referredby" in values:
+        if "referredby" in values and values["referredby"] is not None:
             self._require_user(values["referredby"])
         return self._write(
             lambda: self.users.update(user, values),

@@ -61,21 +61,9 @@ class UserUpdate(BaseModel):
         "lang_iso1",
         "currency_code",
         "timezone",
-        "firstname",
-        "lastname",
-        "airline",
-        "position",
-        "referralcode",
-        "referredby",
-        "stripeid",
-        "logtoid",
-        "createdate",
-        "newsletter",
-        "smsnotification",
-        "rateus",
     )
     @classmethod
-    def reject_null(cls, value: str | None) -> str:
+    def reject_null_required_fields(cls, value: str | None) -> str:
         if value is None:
             raise ValueError("field cannot be null")
         return value
