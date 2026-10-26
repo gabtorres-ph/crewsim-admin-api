@@ -10,10 +10,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.accounts.models import Account
+from app.currencies.models import Currencies
 from app.database import SessionLocal
 from app.esims.models import ESIM
 from app.favorites.models import Favorite  # noqa: F401 -- registers User relationship target
+from app.language.models import Language
 from app.stripe.models import StripeNotification
+from app.timezone.models import Timezone
 from app.usage.models import Usage
 from app.users.models import User
 
@@ -117,7 +120,15 @@ SEED_PROFILES = (
     ("Alex", "Morgan", "en", "USD", "America/New_York", "Delta Air Lines", "Captain"),
     ("Sofia", "Rossi", "it", "EUR", "Europe/Rome", "ITA Airways", "First Officer"),
     ("Haruto", "Sato", "ja", "JPY", "Asia/Tokyo", "Japan Airlines", "Purser"),
-    ("Maria", "Santos", "fil", "PHP", "Asia/Manila", "Philippine Airlines", "Cabin Crew"),
+    (
+        "Maria",
+        "Santos",
+        "Filipino",
+        "PHP",
+        "Asia/Manila",
+        "Philippine Airlines",
+        "Cabin Crew",
+    ),
     ("Lucas", "Silva", "pt", "BRL", "America/Sao_Paulo", "LATAM", "Flight Engineer"),
     ("Amelie", "Dubois", "fr", "EUR", "Europe/Paris", "Air France", "Cabin Manager"),
     ("Kwame", "Mensah", "en", "GHS", "Africa/Accra", "Africa World Airlines", "Captain"),
@@ -336,6 +347,49 @@ def seed_database(session: Session, records: Sequence[SeedRecord]) -> SeedResult
     created_stripe_notifications = 0
 
     with session.begin():
+        languages_by_value: dict[str, int] = {}
+        for language in session.scalars(select(Language)):
+            if language.iso1 is not None:
+                languages_by_value[language.iso1.casefold()] = language.id
+            languages_by_value[language.name.casefold()] = language.id
+
+        currencies_by_code = {
+            currency.code.casefold(): currency.id
+            for currency in session.scalars(select(Currencies))
+        }
+        timezones_by_name = {
+            timezone.name.casefold(): timezone.id
+            for timezone in session.scalars(select(Timezone))
+        }
+
+        missing_languages = sorted(
+            {
+                record.language
+                for record in records
+                if record.language.casefold() not in languages_by_value
+            }
+        )
+        missing_currencies = sorted(
+            {
+                record.currency
+                for record in records
+                if record.currency.casefold() not in currencies_by_code
+            }
+        )
+        missing_timezones = sorted(
+            {
+                record.timezone
+                for record in records
+                if record.timezone.casefold() not in timezones_by_name
+            }
+        )
+        if missing_languages or missing_currencies or missing_timezones:
+            raise ValueError(
+                "Missing lookup data for seed records: "
+                f"languages={missing_languages}, currencies={missing_currencies}, "
+                f"timezones={missing_timezones}"
+            )
+
         account = session.scalar(select(Account).where(Account.name == "Seed account"))
         if account is None:
             account = Account(name="Seed account", balance=0)
@@ -364,9 +418,9 @@ def seed_database(session: Session, records: Sequence[SeedRecord]) -> SeedResult
             if user is None:
                 user = User(
                     email=record.email,
-                    language=record.language,
-                    currency=record.currency,
-                    timezone=record.timezone,
+                    language=languages_by_value[record.language.casefold()],
+                    currency=currencies_by_code[record.currency.casefold()],
+                    timezone=timezones_by_name[record.timezone.casefold()],
                     firstname=record.firstname,
                     lastname=record.lastname,
                     airline=record.airline,

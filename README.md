@@ -20,6 +20,53 @@ This starts the API, database, request logging, and database viewer. Database up
 | [Health check](http://localhost:8000/health) | Confirm the API is running |
 | [Database viewer](http://localhost:5051) | Inspect data; login: `admin@example.com` / `admin` |
 
+## Run containers separately
+
+Copy the local settings once before using any of these commands:
+
+```bash
+cp .env.example .env
+```
+
+Compose can run one service at a time. Omit `-d` to keep its logs in the terminal, or include it to
+run the service in the background:
+
+| Container | Foreground | Background service |
+| --- | --- | --- |
+| PostgreSQL | `docker compose up db` | `docker compose up -d db` |
+| Redis | `docker compose up redis` | `docker compose up -d redis` |
+| Database migrations | `docker compose run --rm migrate` | Run as a one-off task only |
+| API and its dependencies | `docker compose up --build api` | `docker compose up -d --build api` |
+| pgAdmin and PostgreSQL | `docker compose up pgadmin` | `docker compose up -d pgadmin` |
+
+Compose starts declared dependencies automatically. For example, starting `api` also starts
+PostgreSQL and Redis, runs migrations, and then starts the API. Use `--no-deps` only when the
+dependencies are already running:
+
+```bash
+docker compose up --no-deps api
+```
+
+To run a temporary API container for a command instead of starting the API server:
+
+```bash
+docker compose run --rm api python -m app.seed --count 25
+```
+
+Manage background services individually or together:
+
+```bash
+docker compose ps
+docker compose logs --follow api
+docker compose restart api
+docker compose stop api
+docker compose up -d --build --wait
+docker compose down
+```
+
+`docker compose stop` keeps the containers so they can be resumed with `docker compose start`.
+`docker compose down` removes the containers and network but keeps database data in named volumes.
+
 ## Sample data
 
 Create test users, eSIMs, usage, and payment notifications:

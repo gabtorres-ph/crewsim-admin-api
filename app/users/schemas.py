@@ -5,13 +5,14 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 NonEmptyString = Annotated[str, Field(min_length=1, max_length=255)]
 ReferralCode = Annotated[str, Field(min_length=1, max_length=8)]
+LookupId = Annotated[int, Field(gt=0)]
 
 
 class UserBase(BaseModel):
     email: NonEmptyString
-    language: NonEmptyString
-    currency: NonEmptyString
-    timezone: NonEmptyString
+    language: LookupId
+    currency: LookupId
+    timezone: LookupId
     firstname: NonEmptyString | None = None
     lastname: NonEmptyString | None = None
     airline: NonEmptyString | None = None
@@ -34,9 +35,9 @@ class UserCreate(UserBase):
 
 class UserUpdate(BaseModel):
     email: NonEmptyString | None = None
-    language: NonEmptyString | None = None
-    currency: NonEmptyString | None = None
-    timezone: NonEmptyString | None = None
+    language: LookupId | None = None
+    currency: LookupId | None = None
+    timezone: LookupId | None = None
     firstname: NonEmptyString | None = None
     lastname: NonEmptyString | None = None
     airline: NonEmptyString | None = None

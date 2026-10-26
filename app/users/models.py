@@ -17,9 +17,9 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     email: Mapped[str] = mapped_column(String(255), nullable=False)
-    language: Mapped[str] = mapped_column(String(255), nullable=False)
-    currency: Mapped[str] = mapped_column(String(255), nullable=False)
-    timezone: Mapped[str] = mapped_column(String(255), nullable=False)
+    language: Mapped[int] = mapped_column(ForeignKey("languages.id"), nullable=False)
+    currency: Mapped[int] = mapped_column(ForeignKey("currencies.id"), nullable=False)
+    timezone: Mapped[int] = mapped_column(ForeignKey("time_zone.id"), nullable=False)
     firstname: Mapped[str | None] = mapped_column(String(255), nullable=True)
     lastname: Mapped[str | None] = mapped_column(String(255), nullable=True)
     airline: Mapped[str | None] = mapped_column(String(255), nullable=True)
