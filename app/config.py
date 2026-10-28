@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     )
     telcovision_api_url: str = Field(default="", alias="TELCOVISION_API_URL")
     telcovision_api_token: SecretStr = Field(default=SecretStr(""), alias="TELCOVISION_API_TOKEN")
+    telcovision_carrier_rateid: int | None = Field(
+        default=None,
+        alias="TELCOVISION_CARRIER_RATEID",
+        gt=0,
+    )
     accounts_refresh_key: SecretStr = Field(default=SecretStr(""), alias="ACCOUNTS_REFRESH_KEY")
 
     model_config = SettingsConfigDict(

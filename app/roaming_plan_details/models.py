@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, Numeric, String
+from sqlalchemy import JSON, Boolean, DateTime, Integer, Numeric, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,9 +14,7 @@ class RoamingPlanDetails(Base):
     roaming_plan_rule_id: Mapped[int] = mapped_column(
         Integer, primary_key=True, autoincrement=False
     )
-    roaming_plan_id: Mapped[int] = mapped_column(
-        ForeignKey("roaming_plans.id"), nullable=False
-    )
+    roaming_plan_id: Mapped[int] = mapped_column(Integer, nullable=False)
     network_id: Mapped[int] = mapped_column(Integer, nullable=False)
     continent: Mapped[str] = mapped_column(String(100), nullable=False)
     country_name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -29,5 +27,5 @@ class RoamingPlanDetails(Base):
         JSON().with_variant(JSONB(), "postgresql"), nullable=False
     )
     active: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    data_rate: Mapped[Decimal] = mapped_column(Numeric(20, 10), nullable=False)
+    data_rate: Mapped[Decimal | None] = mapped_column(Numeric(20, 10), nullable=True)
     start_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)

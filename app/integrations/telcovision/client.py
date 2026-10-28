@@ -259,6 +259,14 @@ class TelcovisionClient:
     ) -> dict[str, object]:
         return self._request("listTariffRule", tariff_id, validate=validate)
 
+    def get_customer_tariff(
+        self,
+        carrier_rateid: int,
+        *,
+        validate: Callable[[dict[str, object]], object] | None = None,
+    ) -> dict[str, object]:
+        return self._request("getCustomerTariff", carrier_rateid, validate=validate)
+
 
 @contextmanager
 def open_telcovision_client(

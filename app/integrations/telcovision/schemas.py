@@ -201,7 +201,7 @@ class TelcovisionTariffRule(TelcovisionResponseModel):
     roaming_plan_id: StrictInt = Field(alias="roamingplanid", gt=0)
     network_id: StrictInt = Field(alias="networkid", gt=0)
     active: StrictBool
-    data_rate: Decimal = Field(alias="datarate", allow_inf_nan=False)
+    data_rate: Decimal | None = Field(default=None, alias="datarate", allow_inf_nan=False)
     start_date: datetime = Field(alias="startdate")
 
 

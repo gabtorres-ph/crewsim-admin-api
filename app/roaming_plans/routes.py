@@ -82,13 +82,13 @@ def refresh_roaming_plan_details(
     request: Request,
     db: DatabaseSession,
     settings: AppSettings,
-    tariff_id: Annotated[int, Query(gt=0)],
+    tariff_id: int | None = Query(default=None, gt=0),
 ) -> RoamingPlanDetailRefreshResult:
     try:
         return refresh_telcovision_tariff_rules(
             db,
             settings,
-            tariff_id,
+            tariff_id=tariff_id,
             request_id=request.state.request_id,
             outbound_exchanges=request.state.outbound_exchanges,
         )

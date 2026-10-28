@@ -15,7 +15,7 @@ class RoamingPlanDetailSnapshot(BaseModel):
     mcc_mncs: list[dict[str, str]]
     tadigs: list[str]
     active: StrictBool
-    data_rate: Decimal = Field(allow_inf_nan=False)
+    data_rate: Decimal | None = Field(default=None, allow_inf_nan=False)
     start_date: datetime
 
     model_config = ConfigDict(str_strip_whitespace=True)
@@ -39,7 +39,7 @@ class RoamingPlanDetailRead(BaseModel):
     mcc_mncs: list[dict[str, str]]
     tadigs: list[str]
     active: bool
-    data_rate: Decimal
+    data_rate: Decimal | None
     start_date: datetime
 
     model_config = ConfigDict(from_attributes=True)
