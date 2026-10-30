@@ -167,6 +167,23 @@ class TelcovisionSubscriberMoveResponse(TelcovisionResponseModel):
     moved_count: StrictInt = Field(alias="moveSubscriberRangeToAccount", ge=0)
 
 
+class TelcovisionSimProviderStatus(TelcovisionResponseModel):
+    sim_id: StrictInt = Field(alias="simId", gt=0)
+    status: str = Field(min_length=1, max_length=255)
+    start: datetime
+    end: datetime | None = None
+    profile_type: str = Field(alias="profileType", min_length=1, max_length=255)
+    status_modification: str = Field(
+        alias="statusModification", min_length=1, max_length=255
+    )
+
+
+class TelcovisionSimProviderStatusResponse(TelcovisionResponseModel):
+    get_sim_provider_status: list[TelcovisionSimProviderStatus] = Field(
+        alias="getSimProviderStatus"
+    )
+
+
 class TelcovisionSubscriberTariff(TelcovisionResponseModel):
     roaming_plan_id: StrictInt = Field(alias="roamingplanid", gt=0)
     roaming_plan_name: str = Field(alias="roamingplanname", max_length=255)
