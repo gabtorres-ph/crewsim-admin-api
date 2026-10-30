@@ -223,6 +223,14 @@ class TelcovisionClient:
 
         return self._request("getSingleSubscriber", {"imsi": str(imsi)}, validate=validate)
 
+    def get_sim_provider_status(
+        self,
+        sim_id: int,
+        *,
+        validate: Callable[[dict[str, object]], object] | None = None,
+    ) -> dict[str, object]:
+        return self._request("getSimProviderStatus", sim_id, validate=validate)
+
     def move_subscriber_range_to_account(
         self,
         range_start: str,
