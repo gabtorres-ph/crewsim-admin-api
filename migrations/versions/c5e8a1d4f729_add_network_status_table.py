@@ -21,18 +21,24 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     op.create_table(
         "network_status",
-        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("simid", sa.Integer(), nullable=False),
         sa.Column("imsi", sa.String(length=255), nullable=False),
         sa.Column("status", sa.String(length=255), nullable=False),
         sa.Column("start", sa.DateTime(), nullable=False),
+        sa.Column("end", sa.DateTime(), nullable=True),
         sa.Column("profiletype", sa.String(length=255), nullable=False),
         sa.Column("statusmodification", sa.String(length=255), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(op.f("ix_network_status_id"), "network_status", ["id"], unique=False)
+    op.create_index(
+        "network_status_imsi_idx",
+        "network_status",
+        ["imsi"],
+        unique=False,
+    )
 
 
 def downgrade() -> None:
-    op.drop_index(op.f("ix_network_status_id"), table_name="network_status")
+    op.drop_index("network_status_imsi_idx", table_name="network_status")
     op.drop_table("network_status")
