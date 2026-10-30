@@ -9,12 +9,14 @@ from app.esims.manager import ESIMManager
 from app.esims.schemas import ESIMMoveResult, ESIMRefreshResult, ESIMSingleSnapshot, ESIMSnapshot
 from app.integrations.redis.outbound_logging import OutboundExchange
 from app.integrations.telcovision.client import TelcovisionError, open_telcovision_client
+from app.integrations.telcovision.sim_provider_status import parse_sim_provider_status
 from app.integrations.telcovision.schemas import (
     TelcovisionListedSubscriber,
     TelcovisionSingleSubscriberResponse,
     TelcovisionSubscriberMoveResponse,
     TelcovisionSubscribersResponse,
 )
+from app.network_status.schemas import NetworkStatusSnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +93,23 @@ def parse_subscriber_snapshot(payload: dict[str, object]) -> list[ESIMSnapshot]:
     return snapshots
 
 
+def parse_subscriber_sim_id(payload: dict[str, object], *, imsi: str) -> int:
+    """Return the SIM ID for exactly one subscriber containing the requested IMSI."""
+    try:
+        response = TelcovisionSubscribersResponse.model_validate(payload)
+        matching_subscribers = [
+            subscriber
+            for subscriber in response.list_subscriber.subscriber_list
+            if any(str(item.imsi) == imsi for item in subscriber.imsi_list)
+        ]
+    except ValidationError:
+        raise TelcovisionError("invalid_response") from None
+
+    if len(matching_subscribers) != 1:
+        raise TelcovisionError("invalid_response")
+    return matching_subscribers[0].sim.id
+
+
 def parse_single_subscriber(payload: dict[str, object], *, imsi: str) -> ESIMSingleSnapshot:
     """Map only supplied getSingleSubscriber fields for the requested IMSI."""
     try:
@@ -164,19 +183,34 @@ def refresh_telcovision_subscriber(
             imsi,
         )
 
-        def load_snapshot() -> ESIMSingleSnapshot:
+        def load_snapshot() -> tuple[
+            ESIMSingleSnapshot, int, list[NetworkStatusSnapshot]
+        ]:
             payload = client.get_single_subscriber(
                 imsi,
                 validate=lambda body: parse_single_subscriber(body, imsi=imsi),
             )
             snapshot = parse_single_subscriber(payload, imsi=imsi)
+            subscriber_payload = client.list_subscribers_by_imsi(
+                imsi,
+                validate=lambda body: parse_subscriber_sim_id(body, imsi=imsi),
+            )
+            sim_id = parse_subscriber_sim_id(subscriber_payload, imsi=imsi)
+            status_payload = client.get_sim_provider_status(
+                sim_id,
+                validate=lambda body: parse_sim_provider_status(body, imsi=imsi, sim_id=sim_id),
+            )
+            network_statuses = parse_sim_provider_status(status_payload, imsi=imsi, sim_id=sim_id)
             logger.info(
-                "Telcovision subscriber snapshot parsed request_id=%s account_id=%s imsi=%s",
+                "Telcovision subscriber snapshot parsed request_id=%s account_id=%s imsi=%s "
+                "sim_id=%s statuses=%d",
                 request_id,
                 snapshot.account_id,
                 snapshot.imsi,
+                sim_id,
+                len(network_statuses),
             )
-            return snapshot
+            return snapshot, sim_id, network_statuses
 
         return ESIMManager(session).refresh_esim(imsi, load_snapshot)
 

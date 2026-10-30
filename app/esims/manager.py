@@ -16,6 +16,8 @@ from app.esims.schemas import (
     ESIMSnapshot,
     ESIMUpdate,
 )
+from app.network_status.resource_access import NetworkStatusResourceAccess
+from app.network_status.schemas import NetworkStatusSnapshot
 from app.users.resource_access import UserResourceAccess
 
 
@@ -25,6 +27,7 @@ class ESIMManager(TransactionalManager):
         self.esims = ESIMResourceAccess(session)
         self.users = UserResourceAccess(session)
         self.accounts = AccountResourceAccess(session)
+        self.network_statuses = NetworkStatusResourceAccess(session)
 
     def refresh_esims(
         self, account_id: int, fetch_snapshot: Callable[[], list[ESIMSnapshot]]
@@ -46,7 +49,11 @@ class ESIMManager(TransactionalManager):
         )
 
     def refresh_esim(
-        self, imsi: str, fetch_snapshot: Callable[[], ESIMSingleSnapshot]
+        self,
+        imsi: str,
+        fetch_snapshot: Callable[
+            [], tuple[ESIMSingleSnapshot, int, list[NetworkStatusSnapshot]]
+        ],
     ) -> ESIMRefreshResult:
         """Refresh an existing eSIM by IMSI in one transaction."""
 
@@ -54,12 +61,20 @@ class ESIMManager(TransactionalManager):
             esim = self.esims.get_by_imsi(imsi)
             if esim is None:
                 raise ResourceNotFoundError("eSIM with IMSI", imsi)
-            snapshot = fetch_snapshot()
+            snapshot, sim_id, network_statuses = fetch_snapshot()
             if snapshot.imsi != imsi:
                 raise InvalidOperationError("The eSIM refresh snapshot IMSI does not match")
             if snapshot.account_id is not None and "account_id" in snapshot.model_fields_set:
                 self._require_account(snapshot.account_id)
+            if any(status.imsi != imsi for status in network_statuses):
+                raise InvalidOperationError("The network status snapshot IMSI does not match")
+            if any(status.sim_id != sim_id for status in network_statuses):
+                raise InvalidOperationError("The network status snapshot SIM ID does not match")
             esim = self.esims.update_single_snapshot(esim, snapshot)
+            self.network_statuses.replace_for_imsi(imsi, network_statuses)
+            latest_status = max(network_statuses, key=lambda status: status.start, default=None)
+            esim.networkstatus = latest_status.status if latest_status is not None else None
+            self.session.flush()
             return ESIMRefreshResult.model_validate(esim)
 
         return self._write(

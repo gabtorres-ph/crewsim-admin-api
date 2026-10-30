@@ -214,6 +214,15 @@ class TelcovisionClient:
         """Request subscribers for one account through the shared transport."""
         return self._request("listSubscriber", {"accountId": str(account_id)}, validate=validate)
 
+    def list_subscribers_by_imsi(
+        self,
+        imsi: str,
+        *,
+        validate: Callable[[dict[str, object]], object] | None = None,
+    ) -> dict[str, object]:
+        """Request subscribers matching one IMSI prefix through the shared transport."""
+        return self._request("listSubscriber", {"imsiPrefix": imsi}, validate=validate)
+
     def get_single_subscriber(
         self,
         imsi: str,
@@ -222,6 +231,14 @@ class TelcovisionClient:
     ) -> dict[str, object]:
 
         return self._request("getSingleSubscriber", {"imsi": str(imsi)}, validate=validate)
+
+    def get_sim_provider_status(
+        self,
+        sim_id: int,
+        *,
+        validate: Callable[[dict[str, object]], object] | None = None,
+    ) -> dict[str, object]:
+        return self._request("getSimProviderStatus", sim_id, validate=validate)
 
     def move_subscriber_range_to_account(
         self,

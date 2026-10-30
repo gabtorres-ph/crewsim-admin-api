@@ -110,20 +110,22 @@ Run lint checks with `uv run ruff check .`.
 ## Sync provider data
 
 Set `TELCOVISION_API_URL` and `TELCOVISION_API_TOKEN` in `.env` before starting the API.
-Use the API docs to send these requests:
 
 | Request | Effect |
 | --- | --- |
-| `POST /api/accounts/refresh` | Sync all accounts; **delete local accounts missing from the provider** |
-| `POST /api/esims/refresh/{account_id}` | Add or update one account's eSIMs; keep missing eSIMs |
-| `POST /api/esims/{imsi}/refresh` | Refresh an existing eSIM from Telcovision's `getSingleSubscriber` response |
-| `POST /api/esims/move-to-account` | Move selected eSIMs between accounts in Telcovision, then update CrewSim |
+| `POST /api/accounts/refresh` | Sync accounts; remove missing ones. |
+| `POST /api/esims/refresh/{account_id}` | Sync an account's eSIMs. |
+| `POST /api/esims/{imsi}/refresh` | Sync one eSIM and its network-status history. |
+| `POST /api/esims/move-to-account` | Move eSIMs between accounts. |
+| `GET /api/network-status/{imsi}` | Get an eSIM's status history. |
 
-Refresh accounts first, then refresh eSIMs using an existing account ID.
-The eSIM route also accepts `POST /api/esims/refresh?account_id=123`. Neither form needs a body.
-The single eSIM refresh route takes a 5–15 digit IMSI and needs no body. Fields omitted by
-Telcovision keep their existing database values; an unknown local IMSI returns 404.
-Refresh routes currently have no application-level access check.
+Refresh accounts before their eSIMs. The eSIM sync also accepts
+`POST /api/esims/refresh?account_id=123`; refresh routes take no body.
+
+### Network status history
+
+`GET /api/network-status/{imsi}` returns newest-first history; no history returns `[]`.
+Refreshing an eSIM resolves its SIM ID, syncs this history, and updates `networkstatus`.
 
 ### Move eSIMs between accounts
 

@@ -191,6 +191,7 @@ class ESIMRefreshResult(BaseModel):
     id: int
     imsi: str
     account_id: int | None = Field(default=None, validation_alias="accountid")
+    networkstatus: str | None = None
     isesim: bool | None = None
     balance: float | None = None
     use_account_for_charging: bool | None = None
