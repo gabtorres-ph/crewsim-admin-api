@@ -118,12 +118,23 @@ Use the API docs to send these requests:
 | `POST /api/esims/refresh/{account_id}` | Add or update one account's eSIMs; keep missing eSIMs |
 | `POST /api/esims/{imsi}/refresh` | Refresh an existing eSIM from Telcovision's `getSingleSubscriber` response |
 | `POST /api/esims/move-to-account` | Move selected eSIMs between accounts in Telcovision, then update CrewSim |
+| `GET /api/network-status/{imsi}` | Return all stored provider-status history for one IMSI |
 
 Refresh accounts first, then refresh eSIMs using an existing account ID.
 The eSIM route also accepts `POST /api/esims/refresh?account_id=123`. Neither form needs a body.
 The single eSIM refresh route takes a 5–15 digit IMSI and needs no body. Fields omitted by
 Telcovision keep their existing database values; an unknown local IMSI returns 404.
 Refresh routes currently have no application-level access check.
+
+### Network status history
+
+`GET /api/network-status/{imsi}` takes a 5–15 digit IMSI and returns its complete stored status
+history, newest first. An IMSI without stored history returns an empty list.
+
+The Telcovision client supports `getSimProviderStatus` for internal use, but there is currently no
+HTTP endpoint that triggers this provider sync. An internal caller must supply the numeric `id`
+from `listSubscriber.subscriberList[].sim.id`; CrewSim does not call `listSubscriber` automatically
+to discover it. That ID, rather than the IMSI, is sent as the `getSimProviderStatus` request value.
 
 ### Move eSIMs between accounts
 

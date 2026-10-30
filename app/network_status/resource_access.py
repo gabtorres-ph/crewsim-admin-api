@@ -10,15 +10,11 @@ class NetworkStatusResourceAccess(CRUDResourceAccess[NetworkStatus]):
     def __init__(self, session: Session) -> None:
         super().__init__(session, NetworkStatus)
 
-    def list_for_imsi(
-        self, imsi: str, *, offset: int = 0, limit: int = 100
-    ) -> list[NetworkStatus]:
+    def list_for_imsi(self, imsi: str) -> list[NetworkStatus]:
         statement = (
             select(NetworkStatus)
             .where(NetworkStatus.imsi == imsi)
             .order_by(NetworkStatus.start.desc(), NetworkStatus.id)
-            .offset(offset)
-            .limit(limit)
         )
         return list(self.session.scalars(statement))
 

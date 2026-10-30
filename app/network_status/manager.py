@@ -42,8 +42,12 @@ class NetworkStatusManager(TransactionalManager):
         limit: int = 100,
     ) -> list[NetworkStatus]:
         if imsi is not None:
-            return self.network_statuses.list_for_imsi(imsi, offset=offset, limit=limit)
+            statuses = self.list_network_statuses_for_imsi(imsi)
+            return statuses[offset : offset + limit]
         return self.network_statuses.list(offset=offset, limit=limit)
+
+    def list_network_statuses_for_imsi(self, imsi: str) -> list[NetworkStatus]:
+        return self.network_statuses.list_for_imsi(imsi)
 
     def update_network_status(
         self, network_status_id: int, data: NetworkStatusUpdate
