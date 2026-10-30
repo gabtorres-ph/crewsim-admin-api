@@ -13,6 +13,7 @@ from app.email import models as email_models  # noqa: F401
 from app.esims import models as esim_models  # noqa: F401
 from app.favorites import models as favorite_models  # noqa: F401
 from app.language import models as language_models  # noqa: F401
+from app.network_status import models as network_status_models  # noqa: F401
 from app.packages import models as package_models  # noqa: F401
 from app.roaming_plan_details import models as roaming_plan_detail_models  # noqa: F401
 from app.roaming_plans import models as roaming_plan_models  # noqa: F401
