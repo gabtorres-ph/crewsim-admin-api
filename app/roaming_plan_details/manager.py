@@ -43,5 +43,7 @@ class RoamingPlanDetailManager(TransactionalManager):
 
     def list_roaming_plan_details(
         self, *, offset: int = 0, limit: int = 100
-    ) -> list[RoamingPlanDetails]:
-        return self.roaming_plan_details.list(offset=offset, limit=limit)
+    ) -> tuple[int, list[RoamingPlanDetails]]:
+        total = self.roaming_plan_details.count_all()
+        items = self.roaming_plan_details.list(offset=offset, limit=limit)
+        return total, items

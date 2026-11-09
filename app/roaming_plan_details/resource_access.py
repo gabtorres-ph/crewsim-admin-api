@@ -13,6 +13,11 @@ class RoamingPlanDetailResourceAccess(CRUDResourceAccess[RoamingPlanDetails]):
     def __init__(self, session: Session) -> None:
         super().__init__(session, RoamingPlanDetails)
 
+    def count_all(self) -> int:
+        return int(
+            self.session.scalar(select(func.count()).select_from(RoamingPlanDetails)) or 0
+        )
+
     def try_acquire_refresh_lock(self) -> bool:
         """Take the refresh lock until the transaction ends; False if another holds it."""
         return bool(self.session.scalar(select(func.pg_try_advisory_xact_lock(REFRESH_LOCK_KEY))))

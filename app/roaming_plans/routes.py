@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
+from app.common.schemas import PaginatedResponse
 from app.config import Settings, get_settings
 from app.database import get_db
 from app.integrations.telcovision.client import TelcovisionError, TelcovisionNotConfiguredError
@@ -32,14 +33,20 @@ def list_roaming_plans(
     return RoamingPlanManager(db).list_roaming_plans(offset=offset, limit=limit)
 
 
-@router.get("/details", response_model=list[RoamingPlanDetailRead])
+@router.get("/details", response_model=PaginatedResponse[RoamingPlanDetailRead])
 def list_roaming_plan_details(
     db: DatabaseSession,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    page: Annotated[int, Query(ge=1)] = 1,
     limit: Annotated[int, Query(ge=1, le=100)] = 100,
-) -> list[RoamingPlanDetailRead]:
-    return RoamingPlanDetailManager(db).list_roaming_plan_details(
-        offset=offset,
+) -> PaginatedResponse[RoamingPlanDetailRead]:
+    total, items = RoamingPlanDetailManager(db).list_roaming_plan_details(
+        offset=(page - 1) * limit,
+        limit=limit,
+    )
+    return PaginatedResponse[RoamingPlanDetailRead](
+        items=items,
+        total=total,
+        page=page,
         limit=limit,
     )
 
