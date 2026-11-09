@@ -29,3 +29,4 @@ class RoamingPlanDetails(Base):
     active: Mapped[bool] = mapped_column(Boolean, nullable=False)
     data_rate: Mapped[Decimal | None] = mapped_column(Numeric(20, 10), nullable=True)
     start_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    end_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

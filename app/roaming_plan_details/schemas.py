@@ -17,6 +17,7 @@ class RoamingPlanDetailSnapshot(BaseModel):
     active: StrictBool
     data_rate: Decimal | None = Field(default=None, allow_inf_nan=False)
     start_date: datetime
+    end_date: datetime | None = None
 
     model_config = ConfigDict(str_strip_whitespace=True)
 
@@ -41,5 +42,6 @@ class RoamingPlanDetailRead(BaseModel):
     active: bool
     data_rate: Decimal | None
     start_date: datetime
+    end_date: datetime | None
 
     model_config = ConfigDict(from_attributes=True)

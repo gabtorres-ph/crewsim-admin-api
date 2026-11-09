@@ -221,6 +221,7 @@ class TelcovisionTariffRule(TelcovisionResponseModel):
     active: StrictBool
     data_rate: Decimal | None = Field(default=None, alias="datarate", allow_inf_nan=False)
     start_date: datetime = Field(alias="startdate")
+    end_date: datetime | None = Field(default=None, alias="enddate")
 
 
 class TelcovisionTariffRuleList(TelcovisionResponseModel):

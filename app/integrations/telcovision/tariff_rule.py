@@ -40,6 +40,7 @@ def parse_tariff_rule_snapshot(
                 active=rule.active,
                 data_rate=rule.data_rate,
                 start_date=rule.start_date,
+                end_date=rule.end_date,
             )
             for rule in response.list_tariff_rule.rules
         ]
